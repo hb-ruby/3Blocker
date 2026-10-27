@@ -15,12 +15,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnBlockText = document.getElementById("btn-block-text");
   const btnOpenList = document.getElementById("btn-open-list");
 
+  // Sync Card Elements
+  const blocklistCountBadge = document.getElementById("blocklist-count-badge");
+  const blocklistSyncStatus = document.getElementById("blocklist-sync-status");
+  const blocklistSyncTime = document.getElementById("blocklist-sync-time");
+  const btnRefreshBlocklist = document.getElementById("btn-refresh-blocklist");
+  const refreshIcon = document.getElementById("refresh-icon");
+  const refreshBtnText = document.getElementById("refresh-btn-text");
+  const statCountEl = document.getElementById("stat-count");
+
   // Timer Elements
   const timerSection = document.getElementById("timer-section");
   const timerBadge = document.getElementById("timer-badge");
   const timerActiveView = document.getElementById("timer-active-view");
   const timerInactiveView = document.getElementById("timer-inactive-view");
-  const toggleHasLimit = document.getElementById("toggle-has-limit");
+  const timerDomainInactiveEl = document.getElementById("timer-domain-inactive");
+  const limitMinutesSelect = document.getElementById("limit-minutes-select");
+  const btnRemoveLimit = document.getElementById("btn-remove-limit");
   const timerTimeDisplay = document.getElementById("timer-time-display");
   const timerProgressRing = document.getElementById("timer-progress-ring");
   const timerAllowanceEl = document.getElementById("timer-allowance");
@@ -41,10 +52,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   let isBlocked = false;
-  let isTimerRunning = true;
-  let totalAllowanceSeconds = 30 * 60; // 30 minutes
-  let remainingSeconds = 18 * 60 + 42; // 18m 42s
-  let timerInterval = null;
+  let timeLimit = null; // latest GET_TIME_LIMIT response for the current tab, or null if no limit
+  let timerPollInterval = null;
   const RING_CIRCUMFERENCE = 2 * Math.PI * 42; // r = 42 => ~263.89
 
   // Initialize
@@ -52,6 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initSlider();
   initTimer();
   initOptionsButton();
+  initSyncCard();
   updateSliderTrackBackground();
 
   function initOptionsButton() {
@@ -65,6 +75,94 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
     }
+  }
+
+  /**
+   * Blocklist Sync Status & "Refresh now" button logic
+   */
+  async function initSyncCard() {
+    await updateSyncDisplay();
+
+    if (btnRefreshBlocklist) {
+      btnRefreshBlocklist.addEventListener("click", async () => {
+        setSyncRefreshingState(true);
+        try {
+          const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
+          if (browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
+            const res = await browserApi.runtime.sendMessage({ type: "REFRESH_BLOCKLIST_NOW" });
+            if (res && !res.success) {
+              blocklistSyncStatus.textContent = res.error ? "Failed" : "Error";
+              blocklistSyncStatus.className = "sync-status error";
+            }
+          }
+        } catch (e) {
+          console.warn("Refresh request failed:", e);
+        } finally {
+          await updateSyncDisplay();
+          setSyncRefreshingState(false);
+        }
+      });
+    }
+  }
+
+  function setSyncRefreshingState(isRefreshing) {
+    if (!btnRefreshBlocklist) return;
+    btnRefreshBlocklist.disabled = isRefreshing;
+    if (isRefreshing) {
+      refreshIcon.classList.add("spinning");
+      refreshBtnText.textContent = "Updating...";
+      blocklistSyncStatus.textContent = "Updating...";
+      blocklistSyncStatus.className = "sync-status updating";
+    } else {
+      refreshIcon.classList.remove("spinning");
+      refreshBtnText.textContent = "Refresh now";
+    }
+  }
+
+  async function updateSyncDisplay() {
+    try {
+      const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
+      if (browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
+        const status = await browserApi.runtime.sendMessage({ type: "GET_STATUS" });
+        if (status && status.success) {
+          const count = status.domainCount || 0;
+          blocklistCountBadge.textContent = count > 0 ? `${count.toLocaleString()} domains` : "Empty";
+
+          if (statCountEl) {
+            statCountEl.textContent = (status.customBlocksCount || 0).toString();
+          }
+
+          if (status.status === "updating") {
+            blocklistSyncStatus.textContent = "Updating...";
+            blocklistSyncStatus.className = "sync-status updating";
+          } else if (status.status === "error") {
+            blocklistSyncStatus.textContent = "Update failed";
+            blocklistSyncStatus.className = "sync-status error";
+            if (status.lastError) {
+              blocklistSyncStatus.title = status.lastError;
+            }
+          } else {
+            blocklistSyncStatus.textContent = "Up to date";
+            blocklistSyncStatus.className = "sync-status";
+          }
+
+          if (status.fetchedAt) {
+            const date = new Date(status.fetchedAt);
+            blocklistSyncTime.textContent = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          } else {
+            blocklistSyncTime.textContent = "Bundled fallback";
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      console.log("Could not query background status, using default preview values.");
+    }
+
+    // Default preview fallback
+    blocklistCountBadge.textContent = "953,393 domains";
+    blocklistSyncStatus.textContent = "Up to date";
+    blocklistSyncTime.textContent = "Just now";
   }
 
   /**
@@ -122,7 +220,39 @@ document.addEventListener("DOMContentLoaded", () => {
       currentPathEl.textContent = "/path";
     }
 
+    checkCurrentUrlStatus(parsedDomain.fullUrl);
     updateSliderPreview(parseInt(sliderEl.value, 10));
+    refreshTimeLimit();
+  }
+
+  async function checkCurrentUrlStatus(url) {
+    try {
+      const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
+      if (browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
+        const res = await browserApi.runtime.sendMessage({ type: "CHECK_URL", url });
+        if (res && res.success && res.blocked) {
+          isBlocked = true;
+          siteBlockStateEl.textContent = res.reason === "custom_block" ? "Custom Blocked" : "Blocked";
+          siteBlockStateEl.classList.add("blocked");
+          btnBlockLevel.classList.add("blocked-state");
+          btnBlockText.textContent = `Unblock Level ${sliderEl.value}`;
+          return;
+        }
+      }
+    } catch (e) {
+      console.log("Could not query tab status from background.");
+    }
+    renderBlockStatus();
+  }
+
+  function getTargetRuleForLevel(level) {
+    if (level === 1) {
+      return `${parsedDomain.host}${parsedDomain.path}`;
+    } else if (level === 2) {
+      return `${parsedDomain.subdomain}`;
+    } else {
+      return `${parsedDomain.rootDomain}`;
+    }
   }
 
   /**
@@ -149,9 +279,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Block button interaction
-    btnBlockLevel.addEventListener("click", () => {
+    btnBlockLevel.addEventListener("click", async () => {
+      const level = parseInt(sliderEl.value, 10);
+      const rule = getTargetRuleForLevel(level);
+      const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
+
       isBlocked = !isBlocked;
       renderBlockStatus();
+
+      if (browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
+        try {
+          await browserApi.runtime.sendMessage({
+            type: isBlocked ? "ADD_CUSTOM_BLOCK" : "REMOVE_CUSTOM_BLOCK",
+            rule: rule
+          });
+          await updateSyncDisplay();
+        } catch (err) {
+          console.warn("Could not sync block rule with background:", err);
+        }
+      }
     });
   }
 
@@ -211,85 +357,73 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * Site Time Limit & Countdown Timer Logic
+   * Daily Site Time Limit
+   * The background script does the counting and blocking; the popup only shows its state
+   * (polled every second while open) and sends changes.
    */
   function initTimer() {
-    updateTimerVisuals();
-    startTimer();
-
-    // Toggle switch for demonstrating site with or without active time limit
-    toggleHasLimit.addEventListener("change", (e) => {
-      const hasLimit = e.target.checked;
-      if (hasLimit) {
-        timerActiveView.classList.remove("hidden");
-        timerInactiveView.classList.add("hidden");
-        timerBadge.classList.remove("hidden");
-        startTimer();
-      } else {
-        timerActiveView.classList.add("hidden");
-        timerInactiveView.classList.remove("hidden");
-        timerBadge.classList.add("hidden");
-        stopTimer();
-      }
+    btnSetLimit.addEventListener("click", async () => {
+      await sendTimeLimitMessage({
+        type: "SET_TIME_LIMIT",
+        domain: parsedDomain.rootDomain,
+        minutes: parseInt(limitMinutesSelect.value, 10)
+      });
     });
 
-    // Add +5 min
-    btnAddTime.addEventListener("click", () => {
-      remainingSeconds += 300;
-      totalAllowanceSeconds += 300;
-      updateTimerVisuals();
+    btnAddTime.addEventListener("click", async () => {
+      if (!timeLimit) return;
+      await sendTimeLimitMessage({ type: "ADD_TIME_LIMIT_EXTRA", domain: timeLimit.domain, minutes: 5 });
     });
 
-    // Pause / Resume
-    btnPauseTimer.addEventListener("click", () => {
-      isTimerRunning = !isTimerRunning;
-      if (isTimerRunning) {
-        btnPauseTimer.textContent = "Pause";
-        timerBadge.textContent = "Running";
-        timerBadge.className = "timer-badge active";
-      } else {
-        btnPauseTimer.textContent = "Resume";
-        timerBadge.textContent = "Paused";
-        timerBadge.className = "timer-badge";
-        timerBadge.style.background = "rgba(100, 116, 139, 0.2)";
-        timerBadge.style.color = "#94a3b8";
-        timerBadge.style.borderColor = "#334155";
-      }
+    btnPauseTimer.addEventListener("click", async () => {
+      if (!timeLimit) return;
+      await sendTimeLimitMessage({ type: "SET_TIME_LIMIT_PAUSED", domain: timeLimit.domain, paused: !timeLimit.paused });
     });
 
-    // Set Limit button from inactive view
-    btnSetLimit.addEventListener("click", () => {
-      toggleHasLimit.checked = true;
-      toggleHasLimit.dispatchEvent(new Event("change"));
-      totalAllowanceSeconds = 20 * 60;
-      remainingSeconds = 20 * 60;
-      updateTimerVisuals();
+    btnRemoveLimit.addEventListener("click", async () => {
+      if (!timeLimit) return;
+      await sendTimeLimitMessage({ type: "REMOVE_TIME_LIMIT", domain: timeLimit.domain });
     });
+
+    timerPollInterval = setInterval(refreshTimeLimit, 1000);
   }
 
-  function startTimer() {
-    if (timerInterval) clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-      if (!isTimerRunning) return;
-
-      if (remainingSeconds > 0) {
-        remainingSeconds--;
-        updateTimerVisuals();
-      } else {
-        // Expired
-        remainingSeconds = 0;
-        updateTimerVisuals();
-        handleTimerExpired();
-        clearInterval(timerInterval);
+  async function sendTimeLimitMessage(message) {
+    const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
+    if (browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
+      try {
+        const res = await browserApi.runtime.sendMessage(message);
+        if (res && !res.success) console.warn("Time limit update rejected:", res.error);
+      } catch (err) {
+        console.warn("Could not update time limit:", err);
       }
-    }, 1000);
-  }
-
-  function stopTimer() {
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      timerInterval = null;
     }
+    await refreshTimeLimit();
+  }
+
+  async function refreshTimeLimit() {
+    if (!currentUrl) return;
+    const isWebPage = currentUrl.protocol === "http:" || currentUrl.protocol === "https:";
+    timeLimit = null;
+
+    const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
+    if (isWebPage && browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
+      try {
+        const res = await browserApi.runtime.sendMessage({ type: "GET_TIME_LIMIT", url: currentUrl.href });
+        if (res && res.success && res.domain) timeLimit = res;
+      } catch (e) {
+        console.log("Could not query time limit from background.");
+      }
+    }
+
+    timerActiveView.classList.toggle("hidden", !timeLimit);
+    timerInactiveView.classList.toggle("hidden", !!timeLimit);
+    timerBadge.classList.toggle("hidden", !timeLimit);
+    timerDomainInactiveEl.textContent = isWebPage ? parsedDomain.rootDomain : "this page";
+    btnSetLimit.disabled = !isWebPage;
+    limitMinutesSelect.disabled = !isWebPage;
+
+    if (timeLimit) updateTimerVisuals();
   }
 
   function formatTime(totalSecs) {
@@ -298,41 +432,40 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   }
 
+  function formatDuration(totalSecs) {
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins}m ${String(secs).padStart(2, "0")}s`;
+  }
+
   function updateTimerVisuals() {
+    const { remainingSeconds, allowanceSeconds, usedSeconds, paused, counting, expired } = timeLimit;
     timerTimeDisplay.textContent = formatTime(remainingSeconds);
+    timerAllowanceEl.textContent = formatDuration(allowanceSeconds);
+    timerSpentEl.textContent = formatDuration(Math.min(usedSeconds, allowanceSeconds));
+    btnPauseTimer.textContent = paused ? "Resume" : "Pause";
 
-    const spentSeconds = Math.max(0, totalAllowanceSeconds - remainingSeconds);
-    timerAllowanceEl.textContent = `${Math.floor(totalAllowanceSeconds / 60)}m 00s`;
-    timerSpentEl.textContent = `${Math.floor(spentSeconds / 60)}m ${spentSeconds % 60}s`;
-
-    // Progress ring calculation (offset from 0 to RING_CIRCUMFERENCE)
-    // As remaining drops to 0, ring empties or fills
-    const fractionRemaining = remainingSeconds / totalAllowanceSeconds;
+    // Progress ring empties as the allowance is used up
+    const fractionRemaining = allowanceSeconds > 0 ? remainingSeconds / allowanceSeconds : 0;
     const offset = RING_CIRCUMFERENCE * (1 - fractionRemaining);
     timerProgressRing.style.strokeDasharray = `${RING_CIRCUMFERENCE}`;
     timerProgressRing.style.strokeDashoffset = `${offset}`;
+    timerProgressRing.style.stroke = remainingSeconds <= 120 ? "var(--danger-color)" : "var(--warning-color)";
 
-    // Color alert when low on time
-    if (remainingSeconds <= 120 && remainingSeconds > 0) {
-      timerProgressRing.style.stroke = "var(--danger-color)";
-      timerBadge.textContent = "Low Time";
-      timerBadge.className = "timer-badge expired";
-    } else if (remainingSeconds === 0) {
-      timerProgressRing.style.stroke = "var(--danger-color)";
+    if (expired) {
       timerBadge.textContent = "Expired";
       timerBadge.className = "timer-badge expired";
+      siteBlockStateEl.textContent = "Time Up (Blocked)";
+      siteBlockStateEl.classList.add("blocked");
+    } else if (paused) {
+      timerBadge.textContent = "Paused";
+      timerBadge.className = "timer-badge";
+    } else if (remainingSeconds <= 120) {
+      timerBadge.textContent = "Low Time";
+      timerBadge.className = "timer-badge expired";
     } else {
-      timerProgressRing.style.stroke = "var(--warning-color)";
-      if (isTimerRunning) {
-        timerBadge.textContent = "Running";
-        timerBadge.className = "timer-badge active";
-      }
+      timerBadge.textContent = counting ? "Running" : "Idle";
+      timerBadge.className = counting ? "timer-badge active" : "timer-badge";
     }
-  }
-
-  function handleTimerExpired() {
-    isBlocked = true;
-    renderBlockStatus();
-    siteBlockStateEl.textContent = "Time Up (Blocked)";
   }
 });

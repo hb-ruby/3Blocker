@@ -11,8 +11,11 @@
   },
   "permissions": [
     "storage",
-    "activeTab",
-    "declarativeNetRequest"
+    "unlimitedStorage",
+    "webNavigation",
+    "alarms",
+    "tabs",
+    "activeTab"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -22,6 +25,23 @@
     "default_title": "3Blocker"
   },
   "background": {
-    "scripts": ["background.js"]
-  }
+    "scripts": [
+      "blocklist-core.js",
+      "db.js",
+      "background.js"
+    ]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "blocklist.txt",
+        "blocked.html",
+        "blocked.css",
+        "blocked.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }

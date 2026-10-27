@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3Blocker - Website Blocked</title>
+  <link rel="stylesheet" href="blocked.css">
+</head>
+<body>
+  <div class="blocked-card">
+    <div class="shield-icon-wrapper">
+      <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    </div>
+
+    <h1 class="blocked-title" id="blocked-title">Website Blocked</h1>
+    <p class="blocked-subtitle" id="blocked-subtitle">3Blocker has blocked access to this page.</p>
+
+    <div class="details-box">
+      <div class="details-row">
+        <span class="details-label">Target URL:</span>
+        <span class="details-value target-url" id="target-url">Loading...</span>
+      </div>
+      <div class="details-row">
+        <span class="details-label">Reason:</span>
+        <span class="details-value reason-badge" id="block-reason">Adult / Explicit Content</span>
+      </div>
+      <div class="details-row" id="match-row">
+        <span class="details-label">Matched Rule:</span>
+        <span class="details-value match-rule" id="match-rule">--</span>
+      </div>
+    </div>
+
+    <div class="actions-group">
+      <button class="btn btn-primary" id="btn-go-back">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+        Go Back to Safety
+      </button>
+
+      <button class="btn btn-secondary" id="btn-allow-site">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Allow &amp; Unblock This Site
+      </button>
+    </div>
+
+    <footer class="blocked-footer">
+      <span>Protected by <strong>3Blocker</strong></span>
+    </footer>
+  </div>
+
+  <script src="blocked.js"></script>
+</body>
+</html>
