@@ -18,14 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
     targetUrlEl.textContent = "Unknown website";
   }
 
-  if (reason === "time_limit") {
-    blockReasonEl.textContent = "Daily Time Limit Reached";
-    document.getElementById("blocked-title").textContent = "Time's Up";
-    document.getElementById("blocked-subtitle").textContent =
-      "You've used today's time allowance for this site. It resets at midnight.";
-    // The allowlist doesn't override time limits, so offering it would do nothing
-    btnAllowSite.style.display = "none";
-  } else if (reason === "custom_block") {
+  if (reason === "custom_block") {
     blockReasonEl.textContent = "Custom Blocklist Rule";
   } else if (reason === "main_blocklist") {
     blockReasonEl.textContent = "Adult / Explicit Domain List";

@@ -24,22 +24,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const refreshBtnText = document.getElementById("refresh-btn-text");
   const statCountEl = document.getElementById("stat-count");
 
-  // Timer Elements
-  const timerSection = document.getElementById("timer-section");
-  const timerBadge = document.getElementById("timer-badge");
-  const timerActiveView = document.getElementById("timer-active-view");
-  const timerInactiveView = document.getElementById("timer-inactive-view");
-  const timerDomainInactiveEl = document.getElementById("timer-domain-inactive");
-  const limitMinutesSelect = document.getElementById("limit-minutes-select");
-  const btnRemoveLimit = document.getElementById("btn-remove-limit");
-  const timerTimeDisplay = document.getElementById("timer-time-display");
-  const timerProgressRing = document.getElementById("timer-progress-ring");
-  const timerAllowanceEl = document.getElementById("timer-allowance");
-  const timerSpentEl = document.getElementById("timer-spent");
-  const btnAddTime = document.getElementById("btn-add-time");
-  const btnPauseTimer = document.getElementById("btn-pause-timer");
-  const btnSetLimit = document.getElementById("btn-set-limit");
-
   // State
   let currentUrl = null;
   let parsedDomain = {
@@ -52,14 +36,10 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   let isBlocked = false;
-  let timeLimit = null; // latest GET_TIME_LIMIT response for the current tab, or null if no limit
-  let timerPollInterval = null;
-  const RING_CIRCUMFERENCE = 2 * Math.PI * 42; // r = 42 => ~263.89
 
   // Initialize
   initCurrentTab();
   initSlider();
-  initTimer();
   initOptionsButton();
   initSyncCard();
   updateSliderTrackBackground();
@@ -222,7 +202,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     checkCurrentUrlStatus(parsedDomain.fullUrl);
     updateSliderPreview(parseInt(sliderEl.value, 10));
-    refreshTimeLimit();
   }
 
   async function checkCurrentUrlStatus(url) {
@@ -353,119 +332,6 @@ document.addEventListener("DOMContentLoaded", () => {
       siteBlockStateEl.classList.remove("blocked");
       btnBlockLevel.classList.remove("blocked-state");
       btnBlockText.textContent = `Block Level ${level}`;
-    }
-  }
-
-  /**
-   * Daily Site Time Limit
-   * The background script does the counting and blocking; the popup only shows its state
-   * (polled every second while open) and sends changes.
-   */
-  function initTimer() {
-    btnSetLimit.addEventListener("click", async () => {
-      await sendTimeLimitMessage({
-        type: "SET_TIME_LIMIT",
-        domain: parsedDomain.rootDomain,
-        minutes: parseInt(limitMinutesSelect.value, 10)
-      });
-    });
-
-    btnAddTime.addEventListener("click", async () => {
-      if (!timeLimit) return;
-      await sendTimeLimitMessage({ type: "ADD_TIME_LIMIT_EXTRA", domain: timeLimit.domain, minutes: 5 });
-    });
-
-    btnPauseTimer.addEventListener("click", async () => {
-      if (!timeLimit) return;
-      await sendTimeLimitMessage({ type: "SET_TIME_LIMIT_PAUSED", domain: timeLimit.domain, paused: !timeLimit.paused });
-    });
-
-    btnRemoveLimit.addEventListener("click", async () => {
-      if (!timeLimit) return;
-      await sendTimeLimitMessage({ type: "REMOVE_TIME_LIMIT", domain: timeLimit.domain });
-    });
-
-    timerPollInterval = setInterval(refreshTimeLimit, 1000);
-  }
-
-  async function sendTimeLimitMessage(message) {
-    const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
-    if (browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
-      try {
-        const res = await browserApi.runtime.sendMessage(message);
-        if (res && !res.success) console.warn("Time limit update rejected:", res.error);
-      } catch (err) {
-        console.warn("Could not update time limit:", err);
-      }
-    }
-    await refreshTimeLimit();
-  }
-
-  async function refreshTimeLimit() {
-    if (!currentUrl) return;
-    const isWebPage = currentUrl.protocol === "http:" || currentUrl.protocol === "https:";
-    timeLimit = null;
-
-    const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
-    if (isWebPage && browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
-      try {
-        const res = await browserApi.runtime.sendMessage({ type: "GET_TIME_LIMIT", url: currentUrl.href });
-        if (res && res.success && res.domain) timeLimit = res;
-      } catch (e) {
-        console.log("Could not query time limit from background.");
-      }
-    }
-
-    timerActiveView.classList.toggle("hidden", !timeLimit);
-    timerInactiveView.classList.toggle("hidden", !!timeLimit);
-    timerBadge.classList.toggle("hidden", !timeLimit);
-    timerDomainInactiveEl.textContent = isWebPage ? parsedDomain.rootDomain : "this page";
-    btnSetLimit.disabled = !isWebPage;
-    limitMinutesSelect.disabled = !isWebPage;
-
-    if (timeLimit) updateTimerVisuals();
-  }
-
-  function formatTime(totalSecs) {
-    const mins = Math.floor(totalSecs / 60);
-    const secs = totalSecs % 60;
-    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  }
-
-  function formatDuration(totalSecs) {
-    const mins = Math.floor(totalSecs / 60);
-    const secs = totalSecs % 60;
-    return `${mins}m ${String(secs).padStart(2, "0")}s`;
-  }
-
-  function updateTimerVisuals() {
-    const { remainingSeconds, allowanceSeconds, usedSeconds, paused, counting, expired } = timeLimit;
-    timerTimeDisplay.textContent = formatTime(remainingSeconds);
-    timerAllowanceEl.textContent = formatDuration(allowanceSeconds);
-    timerSpentEl.textContent = formatDuration(Math.min(usedSeconds, allowanceSeconds));
-    btnPauseTimer.textContent = paused ? "Resume" : "Pause";
-
-    // Progress ring empties as the allowance is used up
-    const fractionRemaining = allowanceSeconds > 0 ? remainingSeconds / allowanceSeconds : 0;
-    const offset = RING_CIRCUMFERENCE * (1 - fractionRemaining);
-    timerProgressRing.style.strokeDasharray = `${RING_CIRCUMFERENCE}`;
-    timerProgressRing.style.strokeDashoffset = `${offset}`;
-    timerProgressRing.style.stroke = remainingSeconds <= 120 ? "var(--danger-color)" : "var(--warning-color)";
-
-    if (expired) {
-      timerBadge.textContent = "Expired";
-      timerBadge.className = "timer-badge expired";
-      siteBlockStateEl.textContent = "Time Up (Blocked)";
-      siteBlockStateEl.classList.add("blocked");
-    } else if (paused) {
-      timerBadge.textContent = "Paused";
-      timerBadge.className = "timer-badge";
-    } else if (remainingSeconds <= 120) {
-      timerBadge.textContent = "Low Time";
-      timerBadge.className = "timer-badge expired";
-    } else {
-      timerBadge.textContent = counting ? "Running" : "Idle";
-      timerBadge.className = counting ? "timer-badge active" : "timer-badge";
     }
   }
 });

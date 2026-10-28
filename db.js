@@ -324,41 +324,6 @@
     return payload;
   }
 
-  /**
-   * Time Limit Storage Helpers
-   * time_limits: { [domain]: { limitSeconds, usedSeconds, extraSeconds, day, paused } }
-   * time_limit_session: { domain, tabId, startedAt } | null (the currently counting session)
-   */
-  async function getTimeLimitState() {
-    try {
-      if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
-        const data = await browser.storage.local.get(["time_limits", "time_limit_session"]);
-        return {
-          limits: data.time_limits || {},
-          session: data.time_limit_session || null
-        };
-      }
-    } catch (e) {
-      console.warn("Storage access failed:", e);
-    }
-    return { limits: {}, session: null };
-  }
-
-  async function setTimeLimitState(limits, session) {
-    const payload = {
-      time_limits: limits || {},
-      time_limit_session: session || null
-    };
-    try {
-      if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
-        await browser.storage.local.set(payload);
-      }
-    } catch (e) {
-      console.warn("Storage set failed:", e);
-    }
-    return payload;
-  }
-
   const StorageModule = {
     openDatabase,
     getMetadata,
@@ -367,8 +332,6 @@
     loadActiveBlocklist,
     getUserRules,
     setUserRules,
-    getTimeLimitState,
-    setTimeLimitState,
     CHUNK_SIZE
   };
 

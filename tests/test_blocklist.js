@@ -48,7 +48,6 @@ function runTests() {
   testPrecedenceRules();
   testExponentialBackoff();
   testAtomicSwap();
-  testTimeLimits();
 
   print("\n==========================================");
   print(`Results: ${passedTests}/${totalTests} tests passed.`);
@@ -253,41 +252,6 @@ function testAtomicSwap() {
   assert(typeof DB.getMetadata === "function", "DB.getMetadata is defined");
   assert(typeof DB.setMetadata === "function", "DB.setMetadata is defined");
   assert(typeof DB.CHUNK_SIZE === "number" && DB.CHUNK_SIZE > 0, "DB.CHUNK_SIZE is positive number");
-}
-
-function testTimeLimits() {
-  print("\n--- 8. Daily Time Limit Tests ---");
-
-  assertEqual(Core.todayKey(new Date(2026, 0, 5)), "2026-01-05", "todayKey zero-pads month and day");
-
-  const limits = { "example.com": {}, "video.site.org": {} };
-  assertEqual(Core.findLimitedDomain("example.com", limits), "example.com", "Limit matches exact domain");
-  assertEqual(Core.findLimitedDomain("a.b.example.com", limits), "example.com", "Limit matches subdomains via parent domain");
-  assertEqual(Core.findLimitedDomain("site.org", limits), null, "Limit on subdomain does not apply to its parent");
-  assertEqual(Core.findLimitedDomain(null, limits), null, "Null hostname has no limit");
-
-  const now = new Date(2026, 9, 27, 12, 0, 0).getTime();
-  const today = Core.todayKey(new Date(now));
-  const entry = { limitSeconds: 600, usedSeconds: 300, extraSeconds: 60, day: today, paused: false };
-
-  let state = Core.computeTimeLimitState(entry, now, null);
-  assertEqual(state.allowanceSeconds, 660, "Allowance includes today's extra time");
-  assertEqual(state.remainingSeconds, 360, "Remaining = allowance - used");
-  assertEqual(state.expired, false, "Not expired with time remaining");
-
-  state = Core.computeTimeLimitState(entry, now, now - 120 * 1000);
-  assertEqual(state.usedSeconds, 420, "Running session time is added to usage");
-
-  state = Core.computeTimeLimitState(Object.assign({}, entry, { paused: true }), now, now - 120 * 1000);
-  assertEqual(state.usedSeconds, 300, "Paused limit does not count session time");
-
-  state = Core.computeTimeLimitState(entry, now, now - 1000 * 1000);
-  assertEqual(state.remainingSeconds, 0, "Remaining never goes below zero");
-  assertEqual(state.expired, true, "Expired once allowance is used up");
-
-  state = Core.computeTimeLimitState(Object.assign({}, entry, { day: "2000-01-01", usedSeconds: 9999 }), now, null);
-  assertEqual(state.usedSeconds, 0, "Usage from a previous day is ignored");
-  assertEqual(state.allowanceSeconds, 600, "Extra time from a previous day is ignored");
 }
 
 // Execute tests

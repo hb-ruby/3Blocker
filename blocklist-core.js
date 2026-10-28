@@ -294,55 +294,6 @@
     return Math.min(delay, maxDelayMs);
   }
 
-  /**
-   * Local calendar day key (YYYY-MM-DD) used to reset daily time limit usage.
-   *
-   * @param {Date} [date]
-   * @returns {string}
-   */
-  function todayKey(date = new Date()) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-
-  /**
-   * Find the time-limited domain that applies to a hostname (the host itself or any parent domain).
-   *
-   * @param {string} hostname
-   * @param {object} limits - map of domain -> time limit entry
-   * @returns {string|null}
-   */
-  function findLimitedDomain(hostname, limits) {
-    if (!hostname || !limits) return null;
-    for (const d of getParentDomains(hostname)) {
-      if (Object.prototype.hasOwnProperty.call(limits, d)) return d;
-    }
-    return null;
-  }
-
-  /**
-   * Compute today's state of a time limit entry, including any in-progress counting session.
-   * Usage from a previous day is treated as zero.
-   *
-   * @param {{ limitSeconds: number, usedSeconds: number, extraSeconds?: number, day: string, paused?: boolean }} entry
-   * @param {number} now - epoch ms
-   * @param {number|null} sessionStartedAt - epoch ms when counting started for this domain, or null
-   * @returns {{ allowanceSeconds: number, usedSeconds: number, remainingSeconds: number, expired: boolean }}
-   */
-  function computeTimeLimitState(entry, now, sessionStartedAt = null) {
-    const isToday = entry.day === todayKey(new Date(now));
-    const allowanceSeconds = entry.limitSeconds + (isToday ? (entry.extraSeconds || 0) : 0);
-    let usedSeconds = isToday ? entry.usedSeconds : 0;
-    if (sessionStartedAt && !entry.paused) {
-      usedSeconds += Math.max(0, (now - sessionStartedAt) / 1000);
-    }
-    usedSeconds = Math.floor(usedSeconds);
-    const remainingSeconds = Math.max(0, allowanceSeconds - usedSeconds);
-    return { allowanceSeconds, usedSeconds, remainingSeconds, expired: remainingSeconds === 0 };
-  }
-
   // Export module for both browser and Node/CJS environments
   const CoreModule = {
     LIVE_BLOCKLIST_URL,
@@ -353,10 +304,7 @@
     validateBlocklistCandidate,
     getParentDomains,
     checkUrlPrecedence,
-    calculateBackoffDelay,
-    todayKey,
-    findLimitedDomain,
-    computeTimeLimitState
+    calculateBackoffDelay
   };
 
   if (typeof module !== "undefined" && module.exports) {
