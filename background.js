@@ -12,6 +12,7 @@
 let activeBlocklistSet = new Set();
 let userAllowlist = new Set();
 let userCustomBlocks = new Set();
+let bundledCustomBlocks = new Set(); // from custom-blocklist.txt
 let blocklistMeta = null;
 let isUpdating = false;
 
@@ -25,8 +26,9 @@ const backgroundReady = initBackground().catch((err) => {
 async function initBackground() {
   console.log("3Blocker background initializing...");
 
-  // 1. Load user rules from storage
+  // 1. Load user rules from storage and the bundled custom blocks
   await loadUserRules();
+  await loadBundledCustomBlocks();
 
   // Listen for storage changes to keep user rules in sync
   if (typeof browser !== "undefined" && browser.storage && browser.storage.onChanged) {
@@ -108,6 +110,21 @@ async function loadBundledBlocklist() {
     console.log(`Successfully bundled & loaded fallback list with ${activeBlocklistSet.size} domains.`);
   } catch (err) {
     console.error("Critical: Could not load bundled blocklist:", err);
+  }
+}
+
+/**
+ * Load the always-on custom blocks shipped with the extension (./custom-blocklist.txt).
+ */
+async function loadBundledCustomBlocks() {
+  try {
+    const response = await fetch(browser.runtime.getURL("custom-blocklist.txt"));
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    bundledCustomBlocks = BlocklistCore.parseRuleList(await response.text());
+  } catch (err) {
+    console.error("Could not load custom-blocklist.txt:", err);
   }
 }
 
@@ -279,12 +296,7 @@ if (typeof browser !== "undefined" && browser.webRequest && browser.webRequest.o
     async (details) => {
       await backgroundReady;
 
-      const check = BlocklistCore.checkUrlPrecedence(details.url, {
-        allowlist: userAllowlist,
-        customBlocks: userCustomBlocks,
-        mainBlocklistSet: activeBlocklistSet
-      });
-
+      const check = checkUrl(details.url);
       if (check.blocked) {
         return { redirectUrl: blockedPageUrl(details.url, check.reason, check.matchedRule) };
       }
@@ -293,6 +305,38 @@ if (typeof browser !== "undefined" && browser.webRequest && browser.webRequest.o
     { urls: ["http://*/*", "https://*/*"], types: ["main_frame"] },
     ["blocking"]
   );
+}
+
+/**
+ * Single-page sites (e.g. Reddit) change the URL with history.pushState instead of
+ * loading a new page, which onBeforeRequest never sees. Check those URL changes too.
+ */
+if (typeof browser !== "undefined" && browser.webNavigation && browser.webNavigation.onHistoryStateUpdated) {
+  browser.webNavigation.onHistoryStateUpdated.addListener(
+    async (details) => {
+      if (details.frameId !== 0) return;
+      await backgroundReady;
+
+      const check = checkUrl(details.url);
+      if (check.blocked) {
+        try {
+          await browser.tabs.update(details.tabId, { url: blockedPageUrl(details.url, check.reason, check.matchedRule) });
+        } catch (tabErr) {
+          console.warn("Could not redirect blocked tab:", tabErr);
+        }
+      }
+    },
+    { url: [{ schemes: ["http", "https"] }] }
+  );
+}
+
+function checkUrl(url) {
+  return BlocklistCore.checkUrlPrecedence(url, {
+    allowlist: userAllowlist,
+    customBlocks: userCustomBlocks,
+    extraBlocks: bundledCustomBlocks,
+    mainBlocklistSet: activeBlocklistSet
+  });
 }
 
 function blockedPageUrl(targetUrl, reason, matchedRule) {
@@ -345,12 +389,7 @@ async function handleMessage(message) {
     }
 
     case "CHECK_URL": {
-      const result = BlocklistCore.checkUrlPrecedence(message.url, {
-        allowlist: userAllowlist,
-        customBlocks: userCustomBlocks,
-        mainBlocklistSet: activeBlocklistSet
-      });
-      return { success: true, ...result };
+      return { success: true, ...checkUrl(message.url) };
     }
 
     case "ADD_CUSTOM_BLOCK": {

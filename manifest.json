@@ -20,6 +20,7 @@
     "unlimitedStorage",
     "webRequest",
     "webRequestBlocking",
+    "webNavigation",
     "alarms",
     "tabs",
     "activeTab"

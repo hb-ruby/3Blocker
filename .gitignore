@@ -1,0 +1,2 @@
+# Dev dependencies only. Don't ignore blocklist.txt — it's needed at runtime.
+node_modules/

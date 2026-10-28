@@ -1,0 +1,16 @@
+{
+  "name": "3blocker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Firefox extension that blocks adult websites. These scripts are for development only; the extension itself has no dependencies.",
+  "scripts": {
+    "test": "npm run test:unit && npm run lint && npm run test:firefox",
+    "test:unit": "node -e \"globalThis.print = console.log; require('./tests/test_blocklist.js')\"",
+    "lint": "web-ext lint",
+    "test:firefox": "node tests/firefox_e2e.js"
+  },
+  "devDependencies": {
+    "puppeteer-core": "24.29.0",
+    "web-ext": "10.7.0"
+  }
+}

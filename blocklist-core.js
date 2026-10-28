@@ -218,15 +218,67 @@
   }
 
   /**
+   * Parse a hand-written rule list (one rule per line, `#` comments and blank lines ignored).
+   *
+   * @param {string} text
+   * @returns {Set<string>}
+   */
+  function parseRuleList(text) {
+    const rules = new Set();
+    for (const line of (text || "").split(/\r?\n/)) {
+      const rule = line.replace(/#.*$/, "").trim().toLowerCase();
+      if (rule) rules.add(rule);
+    }
+    return rules;
+  }
+
+  const wildcardCache = new Map();
+
+  // "reddit.com*type=media*" -> /^reddit\.com.*type=media.*$/
+  function wildcardToRegExp(rule) {
+    let re = wildcardCache.get(rule);
+    if (!re) {
+      const escaped = rule.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"));
+      re = new RegExp(`^${escaped.join(".*")}$`);
+      wildcardCache.set(rule, re);
+    }
+    return re;
+  }
+
+  /**
+   * Find the first rule that matches a page. A rule matches as an exact `host/path?query`
+   * string, as the host or any parent domain, or, if it contains `*`, as a wildcard pattern
+   * tested against `domain/path?query` for the host and each parent domain (so
+   * `reddit.com/register*` also covers www.reddit.com and old.reddit.com).
+   *
+   * @returns {string|null} the matching rule
+   */
+  function findMatchingRule(rules, exactPageUrl, parentDomains, pathAndQuery) {
+    if (rules.has(exactPageUrl)) return exactPageUrl;
+    for (const d of parentDomains) {
+      if (rules.has(d)) return d;
+    }
+    for (const rule of rules) {
+      if (!rule.includes("*")) continue;
+      const re = wildcardToRegExp(rule);
+      for (const d of parentDomains) {
+        if (re.test(d + pathAndQuery)) return rule;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Check a URL against User Allowlist, User Custom Blocks, and Main Blocklist Set.
    * User allowlist always takes highest precedence.
-   * User custom blocks take second precedence.
+   * User custom blocks (and the bundled extra blocks) take second precedence.
    * Main blocklist takes third precedence.
    *
    * @param {string} urlString
    * @param {object} stores
-   * @param {Set<string>|Array<string>} stores.allowlist - domains or exact URLs allowed by user
-   * @param {Set<string>|Array<string>} stores.customBlocks - domains or exact URLs blocked by user
+   * @param {Set<string>|Array<string>} stores.allowlist - domains, exact URLs or wildcard rules allowed by user
+   * @param {Set<string>|Array<string>} stores.customBlocks - domains, exact URLs or wildcard rules blocked by user
+   * @param {Set<string>|Array<string>} [stores.extraBlocks] - rules from the bundled custom-blocklist.txt
    * @param {Set<string>} stores.mainBlocklistSet - fast Set containing live/bundled blocklist domains
    * @returns {{ blocked: boolean, reason: "allowlisted"|"custom_block"|"main_blocklist"|"allowed", matchedRule: string|null }}
    */
@@ -242,30 +294,25 @@
     }
 
     const host = urlObj.hostname;
-    const exactPageUrl = `${host}${urlObj.pathname}${urlObj.search || ""}`.toLowerCase();
+    const pathAndQuery = `${urlObj.pathname}${urlObj.search || ""}`.toLowerCase();
+    const exactPageUrl = `${host}${pathAndQuery}`;
     const parentDomains = getParentDomains(host);
 
-    const allowlistSet = stores.allowlist instanceof Set ? stores.allowlist : new Set(stores.allowlist || []);
-    const customBlocksSet = stores.customBlocks instanceof Set ? stores.customBlocks : new Set(stores.customBlocks || []);
-    const mainSet = stores.mainBlocklistSet instanceof Set ? stores.mainBlocklistSet : new Set(stores.mainBlocklistSet || []);
+    const toSet = (rules) => (rules instanceof Set ? rules : new Set(rules || []));
+    const allowlistSet = toSet(stores.allowlist);
+    const mainSet = toSet(stores.mainBlocklistSet);
 
     // 1. PRECEDENCE: User Allowlist (Always takes first precedence)
-    if (allowlistSet.has(exactPageUrl)) {
-      return { blocked: false, reason: "allowlisted", matchedRule: exactPageUrl };
-    }
-    for (const d of parentDomains) {
-      if (allowlistSet.has(d)) {
-        return { blocked: false, reason: "allowlisted", matchedRule: d };
-      }
+    const allowed = findMatchingRule(allowlistSet, exactPageUrl, parentDomains, pathAndQuery);
+    if (allowed) {
+      return { blocked: false, reason: "allowlisted", matchedRule: allowed };
     }
 
-    // 2. PRECEDENCE: User Custom Blocklist
-    if (customBlocksSet.has(exactPageUrl)) {
-      return { blocked: true, reason: "custom_block", matchedRule: exactPageUrl };
-    }
-    for (const d of parentDomains) {
-      if (customBlocksSet.has(d)) {
-        return { blocked: true, reason: "custom_block", matchedRule: d };
+    // 2. PRECEDENCE: User Custom Blocklist, then the bundled extra blocks
+    for (const rules of [toSet(stores.customBlocks), toSet(stores.extraBlocks)]) {
+      const blockedBy = findMatchingRule(rules, exactPageUrl, parentDomains, pathAndQuery);
+      if (blockedBy) {
+        return { blocked: true, reason: "custom_block", matchedRule: blockedBy };
       }
     }
 
@@ -303,6 +350,7 @@
     parseBlocklist,
     validateBlocklistCandidate,
     getParentDomains,
+    parseRuleList,
     checkUrlPrecedence,
     calculateBackoffDelay
   };

@@ -1,0 +1,12 @@
+# 3Blocker bundled custom blocks — always blocked, never replaced by the live list refresh.
+# One rule per line. A rule is a domain (also blocks its subdomains), an exact
+# host/path?query, or a pattern where * matches anything. Patterns are tested against
+# domain/path?query for the domain and each parent domain, so "reddit.com/..." also
+# covers www.reddit.com, old.reddit.com, etc.
+
+# Reddit account sign-up (browse Reddit without an account)
+reddit.com/register*
+reddit.com/account/register*
+
+# Reddit media search results (NSFW gifs can autoplay there)
+reddit.com*type=media*

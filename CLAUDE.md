@@ -22,11 +22,16 @@ Firefox runs the MV3 background as an event page and unloads it after ~30 s idle
 | `popup.html/js/css` | Toolbar popup: sync status card + "refresh now", current-tab block slider. |
 | `blocked.html/js/css` | Block page: shows URL, reason, matched rule; "Go back" and "Allow site" (adds allowlist rule, then redirects). |
 | `blocklist.txt` | ~18 MB bundled fallback list, committed to git (required at runtime — listed in `web_accessible_resources`). |
-| `tests/test_blocklist.js` | Test suite for core + DB API surface. Written for `gjs` (uses `print`); with Node run `node -e 'globalThis.print=console.log; require("./tests/test_blocklist.js")'` from the repo root. |
+| `custom-blocklist.txt` | Hand-written, always-on block rules shipped with the extension (Reddit sign-up and `type=media` search). Never touched by the live refresh. Edit it and reload the add-on to change them. |
+| `tests/test_blocklist.js` | Unit tests for core + DB API surface (uses `print`, works under `gjs` or Node). |
+| `tests/firefox_e2e.js` | End-to-end tests in real headless Firefox (Puppeteer over WebDriver BiDi). |
+| `package.json`, `web-ext-config.mjs` | Dev-only: test/lint scripts and dev dependencies; web-ext config keeps dev files out of the extension. The extension itself has no dependencies. |
 
 ## Blocking rules
 
-Precedence (in `checkUrlPrecedence`): **user allowlist > user custom blocks > main blocklist**. Only `http(s)`. Rules match either an exact `host/path?query` string or the host / any parent domain (never a bare TLD).
+Precedence (in `checkUrlPrecedence`): **user allowlist > user custom blocks > bundled `custom-blocklist.txt` > main blocklist**. Only `http(s)`. Allowlist and custom rules match an exact `host/path?query` string, the host / any parent domain (never a bare TLD), or — if the rule contains `*` — a wildcard pattern tested against `domain/path?query` for the host and each parent domain (so `reddit.com/register*` covers `www.`/`old.reddit.com`, but not `notreddit.com`). The main blocklist is domains only.
+
+Besides page requests, `webNavigation.onHistoryStateUpdated` catches single-page-app URL changes (`pushState`, e.g. Reddit switching search tabs) and redirects the tab. In-page modals that don't change the URL can't be caught.
 
 Blocklist source: `https://blocklistproject.github.io/Lists/alt-version/porn-nl.txt`, fetched with ETag/If-Modified-Since. A download is rejected if empty, <50% of current size, >2% junk lines (and >50 invalid), or looks like HTML. Backoff: 5 min × 2^n, capped at 24 h.
 
@@ -42,12 +47,27 @@ Popup slider levels: 1 = exact page (`host+path`), 2 = this host/subdomain, 3 = 
 - The popup's root-domain guess is the last two labels, so e.g. `bbc.co.uk` becomes `co.uk`.
 - Popup has an options button but there is no options page in the manifest yet.
 - No Chrome support yet (would need `service_worker` background and `chrome.*` / polyfill).
-- Neither `gjs` nor `node` is installed on the dev machine; tests have been run with a portable Node downloaded to a temp dir.
-- Firefox checks (not in the repo, run from a temp dir): `web-ext lint` (clean), and a Puppeteer + headless Firefox script covering install, list load, main/custom blocking, "Allow site", allowlist precedence, and blocking after the event page is unloaded (pref `extensions.background.idle.timeout`). WebDriver BiDi needs `MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1` to script extension pages, can't navigate directly to `moz-extension://` URLs, and `page.url()` misses extension redirects (read `location.href`).
+
+## Testing
+
+**Run the saved suite after every change; extend the test files for new behavior instead of writing throwaway scripts.**
+
+```
+npm install          # once: dev deps (puppeteer-core, web-ext)
+npm test             # unit tests -> web-ext lint -> Firefox e2e
+npm run test:unit | npm run lint | npm run test:firefox
+```
+
+- `test:firefox` needs Firefox ≥ 140 and network access. `FIREFOX_BIN` picks the binary (default `firefox` on PATH); `SCREENSHOT_DIR` saves popup/block-page screenshots. Each run uses a fresh temp profile.
+- E2E covers: list load, popup styling, main-list domain/subdomain blocking, block page details, custom block, "Allow this site", allowlist precedence, bundled Reddit rules, pushState blocking, no console errors, and blocking after Firefox unloads the idle event page.
+- WebDriver BiDi quirks the e2e works around: scripting extension pages needs `MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1`; it can't navigate directly to `moz-extension://` URLs (hop via the web-accessible `blocked.html`); a tab showing an extension page can't be navigated away (use a new tab per step); `page.url()` misses extension redirects (read `location.href`).
+- Dev machine has no system Node and no Firefox; a portable Node and the Firefox tarball (plus locally extracted libs on `LD_LIBRARY_PATH`) have been used from a temp dir. The user has root and can install them properly if asked.
 
 ## Changelog
 
 <!-- Newest first. One line per meaningful change. -->
+- 2026-10-28 — Saved the Firefox e2e tests in `tests/firefox_e2e.js` (incl. idle-unload check) and added `package.json` so `npm test` runs unit tests, lint and Firefox e2e. Unit tests now exit non-zero on failure. Added `.gitignore` (node_modules only) and `web-ext-config.mjs`.
+- 2026-10-28 — Added wildcard (`*`) rules, bundled `custom-blocklist.txt` (Reddit `/register`, `/account/register`, `reddit.com*type=media*`), and pushState navigation blocking via `webNavigation.onHistoryStateUpdated`. Tests for wildcard matching.
 - 2026-10-28 — Firefox fixes: blocking now uses blocking `webRequest` + `backgroundReady` so it survives the event page being unloaded (before, listed sites loaded after ~30 s idle); listeners moved to top level; messages wait for rules to load; daily alarm no longer reset on each wake; live list not refetched on every wake. Added `data_collection_permissions`, min Firefox 140; replaced popup `innerHTML`. `web-ext lint` clean.
 - 2026-10-28 — Restyled popup and block page in a minimal graffiti look (grainy black, spray yellow, chalk white; squiggle, torn edge, paint drips). Replaces the short-lived Bauhaus popup style.
 - 2026-10-28 — Removed the daily time limit feature entirely (background counting, popup card, block-page reason, storage helpers, tests). 3Blocker is only about blocking sites.

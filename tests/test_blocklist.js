@@ -48,12 +48,14 @@ function runTests() {
   testPrecedenceRules();
   testExponentialBackoff();
   testAtomicSwap();
+  testWildcardRules();
 
   print("\n==========================================");
   print(`Results: ${passedTests}/${totalTests} tests passed.`);
   if (failedTests.length > 0) {
     print(`FAILURES (${failedTests.length}):`);
     failedTests.forEach((f) => print(`  - ${f}`));
+    if (typeof process !== "undefined") process.exitCode = 1;
   } else {
     print("ALL TESTS PASSED SUCCESSFULLY!");
   }
@@ -252,6 +254,44 @@ function testAtomicSwap() {
   assert(typeof DB.getMetadata === "function", "DB.getMetadata is defined");
   assert(typeof DB.setMetadata === "function", "DB.setMetadata is defined");
   assert(typeof DB.CHUNK_SIZE === "number" && DB.CHUNK_SIZE > 0, "DB.CHUNK_SIZE is positive number");
+}
+
+function testWildcardRules() {
+  print("\n--- 8. Wildcard & Bundled Rule Tests ---");
+
+  const extra = Core.parseRuleList(
+    "# comment line\n\nreddit.com/register*   # sign-up\nReddit.com*type=media*\r\nreddit.com/account/register*\n"
+  );
+  assertEqual(extra.size, 3, "parseRuleList skips comments/blank lines and keeps 3 rules");
+  assert(extra.has("reddit.com*type=media*"), "parseRuleList lowercases rules and strips CR");
+
+  const stores = { allowlist: new Set(), customBlocks: new Set(), extraBlocks: extra, mainBlocklistSet: new Set() };
+  const blocked = (url) => Core.checkUrlPrecedence(url, stores);
+
+  assert(blocked("https://www.reddit.com/register/").blocked, "www.reddit.com/register/ is blocked");
+  assert(blocked("https://old.reddit.com/register?dest=https%3A%2F%2Fold.reddit.com%2F").blocked, "old.reddit.com/register?dest=... is blocked");
+  assert(blocked("https://reddit.com/account/register/").blocked, "reddit.com/account/register/ is blocked");
+  assertEqual(blocked("https://www.reddit.com/register/").reason, "custom_block", "Bundled rules report custom_block");
+  assertEqual(blocked("https://www.reddit.com/register/").matchedRule, "reddit.com/register*", "Matched rule is the wildcard rule");
+
+  assert(blocked("https://www.reddit.com/search/?q=cats&type=media").blocked, "Reddit media search is blocked");
+  assert(blocked("https://www.reddit.com/r/pics/search/?q=x&type=media&sort=new").blocked, "Subreddit media search is blocked");
+  assert(blocked("https://www.reddit.com/search/?q=cats&TYPE=MEDIA").blocked, "Matching is case-insensitive");
+
+  assert(!blocked("https://www.reddit.com/").blocked, "Reddit front page is allowed");
+  assert(!blocked("https://www.reddit.com/r/technology/").blocked, "Subreddits are allowed");
+  assert(!blocked("https://www.reddit.com/search/?q=cats&type=link").blocked, "Post search is allowed");
+  assert(!blocked("https://www.reddit.com/login/").blocked, "Login page is allowed");
+  assert(!blocked("https://notreddit.com/register").blocked, "Wildcard does not match a different domain ending in reddit.com");
+  assert(!blocked("https://example.com/?u=reddit.com&type=media").blocked, "Wildcard must start at a domain boundary");
+
+  const dots = Core.checkUrlPrecedence("https://exampleXcom/", { customBlocks: new Set(["example.com*"]) });
+  assert(!dots.blocked, "Dots in wildcard rules are literal");
+
+  // User allowlist still wins, and can hold wildcard rules too
+  stores.allowlist = new Set(["reddit.com*type=media*"]);
+  const allowed = blocked("https://www.reddit.com/search/?q=cats&type=media");
+  assert(!allowed.blocked && allowed.reason === "allowlisted", "Allowlisted wildcard overrides bundled block");
 }
 
 // Execute tests
