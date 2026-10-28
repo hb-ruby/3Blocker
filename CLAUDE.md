@@ -38,6 +38,7 @@ Popup slider levels: 1 = exact page (`host+path`), 2 = this host/subdomain, 3 = 
 ## Changelog
 
 <!-- Newest first. One line per meaningful change. -->
+- 2026-10-28 — Restyled popup and block page in a minimal graffiti look (grainy black, spray yellow, chalk white; squiggle, torn edge, paint drips). Replaces the short-lived Bauhaus popup style.
 - 2026-10-28 — Removed the daily time limit feature entirely (background counting, popup card, block-page reason, storage helpers, tests). 3Blocker is only about blocking sites.
 - 2026-10-27 — Made the popup's time limit functional: background counts per-domain daily usage and redirects to the block page when it runs out. Removed the "simulate" demo toggle. Added time-limit tests.
 - 2026-10-27 — Removed `.gitignore` so `blocklist.txt` is committed.

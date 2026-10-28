@@ -7,54 +7,47 @@
   <link rel="stylesheet" href="blocked.css">
 </head>
 <body>
-  <div class="blocked-card">
-    <div class="shield-icon-wrapper">
-      <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        <line x1="12" y1="8" x2="12" y2="12"/>
-        <line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-    </div>
-
-    <h1 class="blocked-title" id="blocked-title">Website Blocked</h1>
+  <main class="blocked-card">
+    <h1 class="blocked-title" id="blocked-title">Not <span class="title-accent">here.</span></h1>
+    <!-- Spray-paint squiggle under the headline -->
+    <svg class="scribble" viewBox="0 0 120 14" width="180" height="21" aria-hidden="true">
+      <path d="M2 9 C8 1, 12 1, 14 8 S20 13, 24 5 S32 1, 34 8 S40 13, 45 5 S53 1, 55 8 S61 13, 66 5 S74 1, 76 8 S82 13, 87 5 S95 1, 97 8 S104 12, 118 4"/>
+    </svg>
     <p class="blocked-subtitle" id="blocked-subtitle">3Blocker has blocked access to this page.</p>
 
     <div class="details-box">
       <div class="details-row">
-        <span class="details-label">Target URL:</span>
+        <span class="details-label">URL</span>
         <span class="details-value target-url" id="target-url">Loading...</span>
       </div>
       <div class="details-row">
-        <span class="details-label">Reason:</span>
+        <span class="details-label">Reason</span>
         <span class="details-value reason-badge" id="block-reason">Adult / Explicit Content</span>
       </div>
       <div class="details-row" id="match-row">
-        <span class="details-label">Matched Rule:</span>
+        <span class="details-label">Rule</span>
         <span class="details-value match-rule" id="match-rule">--</span>
       </div>
     </div>
 
     <div class="actions-group">
       <button class="btn btn-primary" id="btn-go-back">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="19" y1="12" x2="5" y2="12"/>
           <polyline points="12 19 5 12 12 5"/>
         </svg>
-        Go Back to Safety
+        Go Back
       </button>
 
       <button class="btn btn-secondary" id="btn-allow-site">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-        Allow &amp; Unblock This Site
+        Allow this site
       </button>
     </div>
 
     <footer class="blocked-footer">
-      <span>Protected by <strong>3Blocker</strong></span>
+      <span><span class="brand-accent">3</span>Blocker</span>
     </footer>
-  </div>
+  </main>
 
   <script src="blocked.js"></script>
 </body>
