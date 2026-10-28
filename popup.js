@@ -317,7 +317,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const min = parseInt(sliderEl.min, 10);
     const max = parseInt(sliderEl.max, 10);
     const percentage = ((val - min) / (max - min)) * 100;
-    sliderEl.style.background = `linear-gradient(to right, #6366f1 0%, #06b6d4 ${percentage}%, #23293b ${percentage}%, #23293b 100%)`;
+    sliderEl.style.background = `linear-gradient(to right, var(--ink) 0%, var(--ink) ${percentage}%, var(--track) ${percentage}%, var(--track) 100%)`;
   }
 
   function renderBlockStatus() {
