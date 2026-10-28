@@ -1,7 +1,11 @@
 /**
- * 3Blocker Background Service Worker / Script
- * Intercepts navigation via webNavigation.onBeforeNavigate,
+ * 3Blocker Background Script
+ * Intercepts top-level page requests via blocking webRequest.onBeforeRequest,
  * enforces multi-tier precedence, and manages live blocklist updates with conditional requests.
+ *
+ * Firefox runs MV3 backgrounds as event pages that are unloaded when idle. Every event listener
+ * is therefore registered synchronously at the top level (so Firefox can wake us for it), and
+ * anything that needs the lists waits on `backgroundReady` first.
  */
 
 // In-memory runtime state
@@ -11,8 +15,10 @@ let userCustomBlocks = new Set();
 let blocklistMeta = null;
 let isUpdating = false;
 
-// Initialize on background startup
-initBackground().catch((err) => {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Initialize on background startup (and on every wake-up after Firefox unloads the event page)
+const backgroundReady = initBackground().catch((err) => {
   console.error("Failed to initialize 3Blocker background:", err);
 });
 
@@ -56,12 +62,17 @@ async function initBackground() {
   // 3. Setup periodic refresh alarm (every 24 hours)
   setupAlarms();
 
-  // 4. Initial update check in background (non-blocking)
-  setTimeout(() => {
-    fetchLiveBlocklist(false).catch((e) => {
-      console.warn("Initial live blocklist check skipped/failed:", e);
-    });
-  }, 3000);
+  // 4. Check the live list if it has never been fetched or is over a day old. Not on every
+  //    start: the event page wakes up often, and the daily alarm covers regular refreshes.
+  const neverFetchedLive = !blocklistMeta || (!blocklistMeta.etag && !blocklistMeta.lastModified);
+  const fetchedAt = blocklistMeta && blocklistMeta.fetchedAt ? Date.parse(blocklistMeta.fetchedAt) : 0;
+  if (neverFetchedLive || Date.now() - fetchedAt > DAY_MS) {
+    setTimeout(() => {
+      fetchLiveBlocklist(false).catch((e) => {
+        console.warn("Initial live blocklist check skipped/failed:", e);
+      });
+    }, 3000);
+  }
 }
 
 /**
@@ -112,16 +123,22 @@ async function loadUserRules() {
 /**
  * Configure Alarms for periodic refreshes.
  */
-function setupAlarms() {
+async function setupAlarms() {
   if (typeof browser === "undefined" || !browser.alarms) return;
 
-  // Periodic daily alarm (every 1440 minutes = 24 hours)
-  browser.alarms.create("refreshBlocklistDaily", {
-    periodInMinutes: 1440
-  });
+  // Periodic daily alarm (every 1440 minutes = 24 hours). Only create it if missing, so
+  // waking the event page doesn't keep pushing the next refresh another day out.
+  if (!(await browser.alarms.get("refreshBlocklistDaily"))) {
+    browser.alarms.create("refreshBlocklistDaily", {
+      periodInMinutes: 1440
+    });
+  }
+}
 
-  browser.alarms.onAlarm.addListener((alarm) => {
+if (typeof browser !== "undefined" && browser.alarms) {
+  browser.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === "refreshBlocklistDaily" || alarm.name === "retryBlocklistAlarm") {
+      await backgroundReady;
       fetchLiveBlocklist(false).catch((err) => {
         console.warn("Alarm triggered blocklist refresh failed:", err);
       });
@@ -251,40 +268,31 @@ function clearRetryAlarm() {
 }
 
 /**
- * WebNavigation Interception & Redirection:
- * Checks incoming top-level navigation against Allowlist, Custom Blocks, and Main Blocklist.
- * If blocked, redirects the tab to the local blocked.html.
+ * Request Interception & Redirection:
+ * Checks top-level page requests against Allowlist, Custom Blocks, and Main Blocklist.
+ * If blocked, the request is redirected to the local blocked.html before anything is sent.
+ * Firefox holds the request while this (async) blocking listener runs, including while a
+ * suspended event page wakes up and reloads the lists.
  */
-if (typeof browser !== "undefined" && browser.webNavigation && browser.webNavigation.onBeforeNavigate) {
-  browser.webNavigation.onBeforeNavigate.addListener(async (details) => {
-    // Only intercept top-level page navigations (frameId 0)
-    if (details.frameId !== 0) return;
+if (typeof browser !== "undefined" && browser.webRequest && browser.webRequest.onBeforeRequest) {
+  browser.webRequest.onBeforeRequest.addListener(
+    async (details) => {
+      await backgroundReady;
 
-    const targetUrl = details.url;
-    if (!targetUrl || (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://"))) {
-      return;
-    }
+      const check = BlocklistCore.checkUrlPrecedence(details.url, {
+        allowlist: userAllowlist,
+        customBlocks: userCustomBlocks,
+        mainBlocklistSet: activeBlocklistSet
+      });
 
-    // Do not intercept extension's own pages
-    const extensionOrigin = browser.runtime.getURL("");
-    if (targetUrl.startsWith(extensionOrigin)) {
-      return;
-    }
-
-    const check = BlocklistCore.checkUrlPrecedence(targetUrl, {
-      allowlist: userAllowlist,
-      customBlocks: userCustomBlocks,
-      mainBlocklistSet: activeBlocklistSet
-    });
-
-    if (check.blocked) {
-      try {
-        await browser.tabs.update(details.tabId, { url: blockedPageUrl(targetUrl, check.reason, check.matchedRule) });
-      } catch (tabErr) {
-        console.warn("Could not redirect blocked tab:", tabErr);
+      if (check.blocked) {
+        return { redirectUrl: blockedPageUrl(details.url, check.reason, check.matchedRule) };
       }
-    }
-  });
+      return {};
+    },
+    { urls: ["http://*/*", "https://*/*"], types: ["main_frame"] },
+    ["blocking"]
+  );
 }
 
 function blockedPageUrl(targetUrl, reason, matchedRule) {
@@ -307,6 +315,10 @@ if (typeof browser !== "undefined" && browser.runtime && browser.runtime.onMessa
 
 async function handleMessage(message) {
   if (!message || !message.type) return { success: false, error: "Missing message type" };
+
+  // After a wake-up the rule sets are empty until loaded; writing before then would
+  // overwrite the user's stored rules.
+  await backgroundReady;
 
   switch (message.type) {
     case "GET_STATUS": {

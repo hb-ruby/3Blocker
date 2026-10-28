@@ -191,7 +191,11 @@ document.addEventListener("DOMContentLoaded", () => {
       currentPathEl.textContent = parsedDomain.path || "/";
       
       if (favIconUrl) {
-        siteFaviconEl.innerHTML = `<img src="${favIconUrl}" alt="favicon" style="width:18px;height:18px;border-radius:2px;">`;
+        const img = document.createElement("img");
+        img.src = favIconUrl;
+        img.alt = "favicon";
+        img.style.cssText = "width:18px;height:18px;border-radius:2px;";
+        siteFaviconEl.replaceChildren(img);
       } else {
         siteFaviconEl.textContent = "🌐";
       }
