@@ -258,21 +258,16 @@ function testAtomicSwap() {
 }
 
 function testWildcardRules() {
-  print("\n--- 8. Wildcard & Bundled Rule Tests ---");
+  print("\n--- 8. Wildcard Rule Tests ---");
 
-  const extra = Core.parseRuleList(
-    "# comment line\n\nreddit.com/register*   # sign-up\nReddit.com*type=media*\r\nreddit.com/account/register*\n"
-  );
-  assertEqual(extra.size, 3, "parseRuleList skips comments/blank lines and keeps 3 rules");
-  assert(extra.has("reddit.com*type=media*"), "parseRuleList lowercases rules and strips CR");
-
-  const stores = { allowlist: new Set(), customBlocks: new Set(), extraBlocks: extra, mainBlocklistSet: new Set() };
+  const customBlocks = new Set(["reddit.com/register*", "reddit.com*type=media*", "reddit.com/account/register*"]);
+  const stores = { allowlist: new Set(), customBlocks, mainBlocklistSet: new Set() };
   const blocked = (url) => Core.checkUrlPrecedence(url, stores);
 
   assert(blocked("https://www.reddit.com/register/").blocked, "www.reddit.com/register/ is blocked");
   assert(blocked("https://old.reddit.com/register?dest=https%3A%2F%2Fold.reddit.com%2F").blocked, "old.reddit.com/register?dest=... is blocked");
   assert(blocked("https://reddit.com/account/register/").blocked, "reddit.com/account/register/ is blocked");
-  assertEqual(blocked("https://www.reddit.com/register/").reason, "custom_block", "Bundled rules report custom_block");
+  assertEqual(blocked("https://www.reddit.com/register/").reason, "custom_block", "Wildcard rules report custom_block");
   assertEqual(blocked("https://www.reddit.com/register/").matchedRule, "reddit.com/register*", "Matched rule is the wildcard rule");
 
   assert(blocked("https://www.reddit.com/search/?q=cats&type=media").blocked, "Reddit media search is blocked");
@@ -292,7 +287,7 @@ function testWildcardRules() {
   // User allowlist still wins, and can hold wildcard rules too
   stores.allowlist = new Set(["reddit.com*type=media*"]);
   const allowed = blocked("https://www.reddit.com/search/?q=cats&type=media");
-  assert(!allowed.blocked && allowed.reason === "allowlisted", "Allowlisted wildcard overrides bundled block");
+  assert(!allowed.blocked && allowed.reason === "allowlisted", "Allowlisted wildcard overrides a wildcard block");
 }
 
 function testNormalizeRule() {

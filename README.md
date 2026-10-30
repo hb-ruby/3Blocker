@@ -4,7 +4,7 @@ Bolton Browser Blocker
 ## How blocking works
 
 Every time you open a web page, Firefox pauses the request for a moment and asks
-3Blocker whether the page is allowed. 3Blocker checks the address against four lists,
+3Blocker whether the page is allowed. 3Blocker checks the address against three lists,
 always in the same order, and **the first list that matches decides**. If nothing
 matches, the page loads as normal. A blocked page never reaches the site: you are sent
 straight to 3Blocker's block page instead.
@@ -24,13 +24,7 @@ straight to 3Blocker's block page instead.
                    │ no match
                    ▼
    ┌───────────────────────────────┐
-   │ 3. Built-in list              │── match ──▶  block page
-   │    (custom-blocklist.txt)     │
-   └───────────────────────────────┘
-                   │ no match
-                   ▼
-   ┌───────────────────────────────┐
-   │ 4. Adult site list            │── match ──▶  block page
+   │ 3. Adult site list            │── match ──▶  block page
    │    (~950,000 domains)         │
    └───────────────────────────────┘
                    │ no match
@@ -39,16 +33,16 @@ straight to 3Blocker's block page instead.
 ```
 
 Because the allowlist is checked first, allowing a site overrides every block, including
-the built-in list. Allowing a site never edits the other lists, so removing it from the
-allowlist brings the block back.
+the adult site list. Allowing a site never edits the adult site list, so removing it from
+the allowlist brings that block back. A rule can't be on both of your own lists at once:
+adding it to one removes it from the other.
 
-### The four lists
+### The three lists
 
 | List | Where it comes from | Can you change it? |
 |---|---|---|
 | Your allowlist | "Allow this site" on the block page, or the options page | Yes |
 | Your blocklist | The popup's block slider, or the options page | Yes |
-| Built-in list | `src/lists/custom-blocklist.txt`, shipped with the extension (currently all of Reddit) | Only by editing the file and reloading the extension |
 | Adult site list | [Block List Project](https://blocklistproject.github.io/Lists/) porn list, refreshed daily; a bundled copy is used until the first download | No |
 
 ### How a rule matches

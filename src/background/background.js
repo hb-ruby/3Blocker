@@ -12,7 +12,6 @@
 let activeBlocklistSet = new Set();
 let userAllowlist = new Set();
 let userCustomBlocks = new Set();
-let bundledCustomBlocks = new Set(); // from custom-blocklist.txt
 let blocklistMeta = null;
 let isUpdating = false;
 
@@ -26,9 +25,8 @@ const backgroundReady = initBackground().catch((err) => {
 async function initBackground() {
   console.log("3Blocker background initializing...");
 
-  // 1. Load user rules from storage and the bundled custom blocks
+  // 1. Load user rules from storage
   await loadUserRules();
-  await loadBundledCustomBlocks();
 
   // Listen for storage changes to keep user rules in sync
   if (typeof browser !== "undefined" && browser.storage && browser.storage.onChanged) {
@@ -110,21 +108,6 @@ async function loadBundledBlocklist() {
     console.log(`Successfully bundled & loaded fallback list with ${activeBlocklistSet.size} domains.`);
   } catch (err) {
     console.error("Critical: Could not load bundled blocklist:", err);
-  }
-}
-
-/**
- * Load the always-on custom blocks shipped with the extension (lists/custom-blocklist.txt).
- */
-async function loadBundledCustomBlocks() {
-  try {
-    const response = await fetch(browser.runtime.getURL("lists/custom-blocklist.txt"));
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    bundledCustomBlocks = BlocklistCore.parseRuleList(await response.text());
-  } catch (err) {
-    console.error("Could not load custom-blocklist.txt:", err);
   }
 }
 
@@ -334,7 +317,6 @@ function checkUrl(url) {
   return BlocklistCore.checkUrlPrecedence(url, {
     allowlist: userAllowlist,
     customBlocks: userCustomBlocks,
-    extraBlocks: bundledCustomBlocks,
     mainBlocklistSet: activeBlocklistSet
   });
 }

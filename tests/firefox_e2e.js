@@ -169,20 +169,6 @@ async function testBlocking() {
   check(ph.blocked === false, "Allowlist overrides the main blocklist", JSON.stringify(ph));
   await send(ext, { type: "REMOVE_ALLOWLIST", rule: "pornhub.com" });
 
-  // Bundled custom-blocklist.txt rules (Reddit blocked completely)
-  for (const url of ["https://www.reddit.com/", "https://old.reddit.com/r/technology/", "https://reddit.com/search/?q=cats", "https://i.redd.it/example.jpg"]) {
-    r = await visit(url);
-    check(r.url.startsWith(BLOCKED) && r.url.includes("reason=custom_block"), `Bundled rule blocks ${url}`, r.url.slice(0, 120));
-  }
-
-  // Allowlisting a bundled rule only overrides it; removing the allowlist entry restores the block
-  await send(ext, { type: "ADD_ALLOWLIST", rule: "reddit.com" });
-  let rd = await send(ext, { type: "CHECK_URL", url: "https://www.reddit.com/" });
-  check(!rd.blocked && rd.reason === "allowlisted", "Allowlist overrides a bundled rule", JSON.stringify(rd));
-  await send(ext, { type: "REMOVE_ALLOWLIST", rule: "reddit.com" });
-  rd = await send(ext, { type: "CHECK_URL", url: "https://www.reddit.com/" });
-  check(rd.blocked && rd.reason === "custom_block" && rd.matchedRule === "reddit.com", "Bundled rule applies again after removing the allowlist entry", JSON.stringify(rd));
-
   // In-page (pushState) navigation to a blocked URL. example.com was allowlisted above,
   // and the allowlist overrides every block rule, so remove that first.
   await send(ext, { type: "REMOVE_ALLOWLIST", rule: "example.com" });

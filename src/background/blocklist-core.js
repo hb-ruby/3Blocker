@@ -218,21 +218,6 @@
   }
 
   /**
-   * Parse a hand-written rule list (one rule per line, `#` comments and blank lines ignored).
-   *
-   * @param {string} text
-   * @returns {Set<string>}
-   */
-  function parseRuleList(text) {
-    const rules = new Set();
-    for (const line of (text || "").split(/\r?\n/)) {
-      const rule = line.replace(/#.*$/, "").trim().toLowerCase();
-      if (rule) rules.add(rule);
-    }
-    return rules;
-  }
-
-  /**
    * Clean up a rule typed or pasted by the user: lowercase, trim, drop a leading scheme
    * (`https://`) and a trailing `#fragment`. Returns null if nothing usable is left: empty,
    * containing whitespace, or with no `.` or `*` (a bare word like `com` can never match).
@@ -286,14 +271,13 @@
   /**
    * Check a URL against User Allowlist, User Custom Blocks, and Main Blocklist Set.
    * User allowlist always takes highest precedence.
-   * User custom blocks (and the bundled extra blocks) take second precedence.
+   * User custom blocks take second precedence.
    * Main blocklist takes third precedence.
    *
    * @param {string} urlString
    * @param {object} stores
    * @param {Set<string>|Array<string>} stores.allowlist - domains, exact URLs or wildcard rules allowed by user
    * @param {Set<string>|Array<string>} stores.customBlocks - domains, exact URLs or wildcard rules blocked by user
-   * @param {Set<string>|Array<string>} [stores.extraBlocks] - rules from the bundled custom-blocklist.txt
    * @param {Set<string>} stores.mainBlocklistSet - fast Set containing live/bundled blocklist domains
    * @returns {{ blocked: boolean, reason: "allowlisted"|"custom_block"|"main_blocklist"|"allowed", matchedRule: string|null }}
    */
@@ -323,12 +307,10 @@
       return { blocked: false, reason: "allowlisted", matchedRule: allowed };
     }
 
-    // 2. PRECEDENCE: User Custom Blocklist, then the bundled extra blocks
-    for (const rules of [toSet(stores.customBlocks), toSet(stores.extraBlocks)]) {
-      const blockedBy = findMatchingRule(rules, exactPageUrl, parentDomains, pathAndQuery);
-      if (blockedBy) {
-        return { blocked: true, reason: "custom_block", matchedRule: blockedBy };
-      }
+    // 2. PRECEDENCE: User Custom Blocklist
+    const blockedBy = findMatchingRule(toSet(stores.customBlocks), exactPageUrl, parentDomains, pathAndQuery);
+    if (blockedBy) {
+      return { blocked: true, reason: "custom_block", matchedRule: blockedBy };
     }
 
     // 3. PRECEDENCE: Main Blocklist (checks host and parent domains against the set)
@@ -365,7 +347,6 @@
     parseBlocklist,
     validateBlocklistCandidate,
     getParentDomains,
-    parseRuleList,
     normalizeRule,
     checkUrlPrecedence,
     calculateBackoffDelay
