@@ -1,0 +1,288 @@
+/* Same street / graffiti palette as the popup and block page */
+:root {
+  --concrete: #0e0e0e;
+  --slab: #1a1a1a;
+  --slab-raised: #232323;
+  --track: #3a3a3a;
+  --ink: #0e0e0e;
+  --chalk: #f2f2ee;
+  --chalk-dim: #a3a39d;
+  --chalk-faint: #6c6c67;
+
+  --yellow: #f7e23b;
+  --yellow-deep: #e2cb1c;
+  --red: #ff6b5a;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-full: 9999px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --font-display: "Archivo Black", "Arial Black", "Roboto", "Helvetica Neue", Arial, "DejaVu Sans", sans-serif;
+  --font-body: "Roboto", "Segoe UI", "Helvetica Neue", Arial, "DejaVu Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  background-color: var(--concrete);
+  background-image: var(--grain);
+  color: var(--chalk);
+  padding: 40px 20px;
+}
+
+.options-page {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* Header */
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.brand-title {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -1px;
+  text-transform: uppercase;
+}
+
+.brand-accent {
+  color: var(--yellow);
+}
+
+.scribble {
+  fill: none;
+  stroke: var(--yellow);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 220;
+  stroke-dashoffset: 220;
+  animation: spray 0.9s var(--ease) 0.2s forwards;
+}
+
+@keyframes spray {
+  to { stroke-dashoffset: 0; }
+}
+
+.page-subtitle {
+  margin-top: 8px;
+  color: var(--chalk-dim);
+}
+
+/* Rule cards */
+.rule-card {
+  background: var(--slab);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.count-badge {
+  min-width: 28px;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  background: var(--slab-raised);
+  color: var(--yellow);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.add-form {
+  display: flex;
+  gap: 8px;
+}
+
+.rule-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 2px solid var(--track);
+  border-radius: var(--radius-sm);
+  background: var(--concrete);
+  color: var(--chalk);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  transition: border-color 0.25s var(--ease);
+}
+
+.rule-input::placeholder {
+  color: var(--chalk-faint);
+}
+
+.rule-input:focus {
+  outline: none;
+  border-color: var(--yellow);
+}
+
+.btn {
+  padding: 10px 18px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background-color 0.25s var(--ease), color 0.25s var(--ease), border-color 0.25s var(--ease);
+}
+
+.btn:focus-visible,
+.remove-btn:focus-visible {
+  outline: 2px solid var(--chalk);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.btn-primary:hover {
+  background: var(--yellow-deep);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--chalk-dim);
+  border-color: var(--chalk-faint);
+}
+
+.btn-secondary:hover {
+  color: var(--chalk);
+  border-color: var(--chalk);
+}
+
+.form-error {
+  color: var(--red);
+  font-size: 12.5px;
+}
+
+.form-error:empty {
+  display: none;
+}
+
+/* Rule list */
+.rule-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.rule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 2px;
+  border-top: 1px solid var(--slab-raised);
+}
+
+.rule-text {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.remove-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--track);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--chalk-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.25s var(--ease), border-color 0.25s var(--ease);
+}
+
+.remove-btn:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.empty-note {
+  color: var(--chalk-faint);
+  font-size: 13px;
+}
+
+/* Rule format help */
+.help-box {
+  color: var(--chalk-dim);
+  font-size: 13px;
+}
+
+.help-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--chalk-faint);
+  margin-bottom: 6px;
+}
+
+.help-box ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.help-box code {
+  font-family: var(--font-mono);
+  color: var(--chalk);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .scribble {
+    stroke-dashoffset: 0;
+  }
+}

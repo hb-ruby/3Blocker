@@ -232,6 +232,21 @@
     return rules;
   }
 
+  /**
+   * Clean up a rule typed or pasted by the user: lowercase, trim, drop a leading scheme
+   * (`https://`) and a trailing `#fragment`. Returns null if nothing usable is left: empty,
+   * containing whitespace, or with no `.` or `*` (a bare word like `com` can never match).
+   *
+   * @param {string} input
+   * @returns {string|null}
+   */
+  function normalizeRule(input) {
+    if (typeof input !== "string") return null;
+    const rule = input.trim().toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, "").replace(/#.*$/, "");
+    if (!rule || /\s/.test(rule) || !/[.*]/.test(rule)) return null;
+    return rule;
+  }
+
   const wildcardCache = new Map();
 
   // "reddit.com*type=media*" -> /^reddit\.com.*type=media.*$/
@@ -351,6 +366,7 @@
     validateBlocklistCandidate,
     getParentDomains,
     parseRuleList,
+    normalizeRule,
     checkUrlPrecedence,
     calculateBackoffDelay
   };

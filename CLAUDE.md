@@ -16,10 +16,11 @@ Firefox runs the MV3 background as an event page and unloads it after ~30 s idle
 | File | Role |
 |---|---|
 | `manifest.json` | MV3 manifest. Background loads `blocklist-core.js` → `db.js` → `background.js` in that order (they share globals). |
-| `blocklist-core.js` | Pure logic, no browser APIs. Exposes `BlocklistCore` (global + CommonJS): hostname validation, list parsing, pre-swap validation, parent-domain expansion, URL precedence check, backoff calc. |
+| `blocklist-core.js` | Pure logic, no browser APIs. Exposes `BlocklistCore` (global + CommonJS): hostname validation, list parsing, pre-swap validation, user-rule normalization, parent-domain expansion, URL precedence check, backoff calc. |
 | `db.js` | Exposes `BlocklistDB`. IndexedDB `3BlockerDB` (meta store + chunked domain store) with atomic version swap; user rules in `browser.storage.local` (`user_allowlist`, `user_custom_blocks`). Has a mock DB for tests. |
 | `background.js` | Holds in-memory Sets, intercepts top-level requests with blocking `webRequest.onBeforeRequest` and redirects blocked ones to `blocked.html?url=&reason=&match=`. Fetches live list (on start only if never fetched live or >1 day old), daily alarm, exponential-backoff retry alarm. Message API (below). |
 | `popup.html/js/css` | Toolbar popup: sync status card + "refresh now", current-tab block slider. |
+| `options.html/js/css` | Options page (`options_ui`, opens in a tab from the popup's list button): shows the user's custom blocklist and allowlist, add/remove rules, live-updates on `storage.onChanged`. |
 | `blocked.html/js/css` | Block page: shows URL, reason, matched rule; "Go back" and "Allow site" (adds allowlist rule, then redirects). |
 | `blocklist.txt` | ~18 MB bundled fallback list, committed to git (required at runtime — listed in `web_accessible_resources`). |
 | `custom-blocklist.txt` | Hand-written, always-on block rules shipped with the extension (Reddit sign-up and `type=media` search). Never touched by the live refresh. Edit it and reload the add-on to change them. |
@@ -39,13 +40,14 @@ Popup slider levels: 1 = exact page (`host+path`), 2 = this host/subdomain, 3 = 
 
 ## Message API (`browser.runtime.sendMessage`)
 
-`GET_STATUS`, `REFRESH_BLOCKLIST_NOW`, `CHECK_URL {url}`, `ADD_CUSTOM_BLOCK {rule}`, `REMOVE_CUSTOM_BLOCK {rule}`, `ADD_ALLOWLIST {rule}` (also removes the same rule from custom blocks), `REMOVE_ALLOWLIST {rule}`.
+`GET_STATUS`, `REFRESH_BLOCKLIST_NOW`, `CHECK_URL {url}`, `GET_USER_RULES` (→ sorted `allowlist`, `customBlocks` arrays), `ADD_CUSTOM_BLOCK {rule}` (also removes the same rule from the allowlist), `REMOVE_CUSTOM_BLOCK {rule}`, `ADD_ALLOWLIST {rule}` (also removes the same rule from custom blocks), `REMOVE_ALLOWLIST {rule}`.
+
+Adds run the rule through `BlocklistCore.normalizeRule` (lowercase, trim, strip `scheme://` and `#fragment`; reject empty, whitespace, or no `.`/`*`) and answer `{success:false, error:"Not a valid rule"}` if it fails. Removes take the stored string as-is.
 
 ## Current state / known gaps
 
 - Scope is deliberately just blocking sites (no time limits or other features); keep it simple.
 - The popup's root-domain guess is the last two labels, so e.g. `bbc.co.uk` becomes `co.uk`.
-- Popup has an options button but there is no options page in the manifest yet.
 - No Chrome support yet (would need `service_worker` background and `chrome.*` / polyfill).
 
 ## Testing
@@ -59,13 +61,14 @@ npm run test:unit | npm run lint | npm run test:firefox
 ```
 
 - `test:firefox` needs Firefox ≥ 140 and network access. `FIREFOX_BIN` picks the binary (default `firefox` on PATH); `SCREENSHOT_DIR` saves popup/block-page screenshots. Each run uses a fresh temp profile.
-- E2E covers: list load, popup styling, main-list domain/subdomain blocking, block page details, custom block, "Allow this site", allowlist precedence, bundled Reddit rules, pushState blocking, no console errors, and blocking after Firefox unloads the idle event page.
+- E2E covers: list load, popup styling, main-list domain/subdomain blocking, block page details, custom block, options page (list/add/remove/invalid input/live update), "Allow this site", allowlist precedence, bundled Reddit rules, pushState blocking, no console errors, and blocking after Firefox unloads the idle event page.
 - WebDriver BiDi quirks the e2e works around: scripting extension pages needs `MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1`; it can't navigate directly to `moz-extension://` URLs (hop via the web-accessible `blocked.html`); a tab showing an extension page can't be navigated away (use a new tab per step); `page.url()` misses extension redirects (read `location.href`).
-- Dev machine has no system Node and no Firefox; a portable Node and the Firefox tarball (plus locally extracted libs on `LD_LIBRARY_PATH`) have been used from a temp dir. The user has root and can install them properly if asked.
+- Dev machine has system Node 20 / npm 9 and Firefox ESR 153 (`/usr/bin/firefox`), installed via apt. `npm test` works with no env vars.
 
 ## Changelog
 
 <!-- Newest first. One line per meaningful change. -->
+- 2026-10-30 — Added the options page (`options.html/js/css`, `options_ui` in the manifest), opened by the popup's list button: view, add and remove custom block and allowlist rules. New `GET_USER_RULES` message; adds are validated with `normalizeRule`, and adding a custom block now drops the same rule from the allowlist. Unit + e2e tests for it. E2E now finds `firefox` on PATH itself (Puppeteer needs an absolute path).
 - 2026-10-28 — Saved the Firefox e2e tests in `tests/firefox_e2e.js` (incl. idle-unload check) and added `package.json` so `npm test` runs unit tests, lint and Firefox e2e. Unit tests now exit non-zero on failure. Added `.gitignore` (node_modules only) and `web-ext-config.mjs`.
 - 2026-10-28 — Added wildcard (`*`) rules, bundled `custom-blocklist.txt` (Reddit `/register`, `/account/register`, `reddit.com*type=media*`), and pushState navigation blocking via `webNavigation.onHistoryStateUpdated`. Tests for wildcard matching.
 - 2026-10-28 — Firefox fixes: blocking now uses blocking `webRequest` + `backgroundReady` so it survives the event page being unloaded (before, listed sites loaded after ~30 s idle); listeners moved to top level; messages wait for rules to load; daily alarm no longer reset on each wake; live list not refetched on every wake. Added `data_collection_permissions`, min Firefox 140; replaced popup `innerHTML`. `web-ext lint` clean.

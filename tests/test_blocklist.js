@@ -49,6 +49,7 @@ function runTests() {
   testExponentialBackoff();
   testAtomicSwap();
   testWildcardRules();
+  testNormalizeRule();
 
   print("\n==========================================");
   print(`Results: ${passedTests}/${totalTests} tests passed.`);
@@ -292,6 +293,19 @@ function testWildcardRules() {
   stores.allowlist = new Set(["reddit.com*type=media*"]);
   const allowed = blocked("https://www.reddit.com/search/?q=cats&type=media");
   assert(!allowed.blocked && allowed.reason === "allowlisted", "Allowlisted wildcard overrides bundled block");
+}
+
+function testNormalizeRule() {
+  print("\n--- User rule normalization ---");
+  assertEqual(Core.normalizeRule("  Example.COM "), "example.com", "Trims and lowercases");
+  assertEqual(Core.normalizeRule("https://www.example.com/path?q=1#top"), "www.example.com/path?q=1", "Drops scheme and fragment");
+  assertEqual(Core.normalizeRule("http://example.com/"), "example.com/", "Keeps the path, so a page rule stays a page rule");
+  assertEqual(Core.normalizeRule("Reddit.com/register*"), "reddit.com/register*", "Keeps wildcard rules");
+  assertEqual(Core.normalizeRule(""), null, "Rejects empty input");
+  assertEqual(Core.normalizeRule("   "), null, "Rejects whitespace-only input");
+  assertEqual(Core.normalizeRule("exa mple.com"), null, "Rejects rules containing spaces");
+  assertEqual(Core.normalizeRule("com"), null, "Rejects a bare word that can never match");
+  assertEqual(Core.normalizeRule(null), null, "Rejects non-strings");
 }
 
 // Execute tests

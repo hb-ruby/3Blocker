@@ -32,10 +32,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let browser;
 const consoleErrors = [];
 
+// Puppeteer needs an absolute path, so look "firefox" up on PATH unless FIREFOX_BIN is set
+function firefoxPath() {
+  if (process.env.FIREFOX_BIN) return process.env.FIREFOX_BIN;
+  for (const dir of (process.env.PATH || "").split(path.delimiter)) {
+    const candidate = path.join(dir, "firefox");
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return "firefox";
+}
+
 async function launch(extraPrefs = {}) {
   browser = await puppeteer.launch({
     browser: "firefox",
-    executablePath: process.env.FIREFOX_BIN || "firefox",
+    executablePath: firefoxPath(),
     headless: true,
     userDataDir: fs.mkdtempSync(path.join(os.tmpdir(), "3blocker-ff-")),
     // Lets WebDriver run scripts in extension pages (to call the message API)
@@ -183,8 +193,56 @@ async function testBlocking() {
   const spa = await waitForLanding(r.page, 5000);
   check(spa.url.startsWith(BLOCKED), "pushState to a blocked URL redirects to block page", `${spa.ms} ms`);
 
+  await testOptionsPage(ext);
+
   check(consoleErrors.length === 0, "No errors in extension pages", consoleErrors.join(" | ").slice(0, 300));
   await browser.close();
+}
+
+// Options page: shows the user's lists and edits them through the same message API
+async function testOptionsPage(ext) {
+  const opts = await openExt("options.html", { width: 900, height: 900 });
+  const listed = (id) => opts.evaluate((i) => [...document.querySelectorAll(`#${i} .rule-text`)].map((e) => e.textContent), id);
+
+  const blocks = await listed("blocklist-list");
+  check(blocks.includes("example.com*type=media*"), "Options page lists existing custom blocks", JSON.stringify(blocks));
+
+  await opts.type("#blocklist-input", "https://Options-Test.example.org/");
+  await opts.click("#blocklist-form button");
+  await opts.waitForFunction(() => document.querySelector("#blocklist-input").value === "", { timeout: 5000 }).catch(() => {});
+  const afterAdd = await listed("blocklist-list");
+  check(afterAdd.includes("options-test.example.org/"), "Options page adds a block rule (scheme stripped, lowercased)", JSON.stringify(afterAdd));
+  let res = await send(ext, { type: "CHECK_URL", url: "https://options-test.example.org/" });
+  check(res.blocked && res.reason === "custom_block", "Rule added on the options page blocks the site", JSON.stringify(res));
+
+  await opts.type("#blocklist-input", "not a rule");
+  await opts.click("#blocklist-form button");
+  await sleep(300);
+  const err = await opts.evaluate(() => document.getElementById("blocklist-error").textContent);
+  check(err.length > 0, "Options page rejects an invalid rule", err);
+
+  await opts.type("#allowlist-input", "allowed.example.org");
+  await opts.click("#allowlist-form button");
+  await sleep(300);
+  check((await listed("allowlist-list")).includes("allowed.example.org"), "Options page adds an allowlist rule");
+
+  // A rule added elsewhere (e.g. from the popup) shows up without reloading
+  await send(ext, { type: "ADD_ALLOWLIST", rule: "from-popup.example.org" });
+  await sleep(300);
+  check((await listed("allowlist-list")).includes("from-popup.example.org"), "Options page updates when rules change elsewhere");
+  await screenshot(opts, "options.png");
+
+  await opts.click('#blocklist-list button[aria-label="Remove options-test.example.org/"]');
+  await sleep(300);
+  check(!(await listed("blocklist-list")).includes("options-test.example.org/"), "Options page removes a block rule");
+  res = await send(ext, { type: "CHECK_URL", url: "https://options-test.example.org/" });
+  check(!res.blocked, "Removed rule no longer blocks", JSON.stringify(res));
+
+  await opts.click('#allowlist-list button[aria-label="Remove allowed.example.org"]');
+  await sleep(300);
+  check(!(await listed("allowlist-list")).includes("allowed.example.org"), "Options page removes an allowlist rule");
+  await send(ext, { type: "REMOVE_ALLOWLIST", rule: "from-popup.example.org" });
+  await opts.close();
 }
 
 // Firefox unloads idle MV3 event pages (normally after 30 s). Blocking must still work when a

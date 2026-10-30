@@ -32,6 +32,10 @@
     "default_popup": "popup.html",
     "default_title": "3Blocker"
   },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "background": {
     "scripts": [
       "blocklist-core.js",

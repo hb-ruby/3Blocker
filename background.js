@@ -392,11 +392,22 @@ async function handleMessage(message) {
       return { success: true, ...checkUrl(message.url) };
     }
 
+    case "GET_USER_RULES": {
+      return {
+        success: true,
+        allowlist: [...userAllowlist].sort(),
+        customBlocks: [...userCustomBlocks].sort()
+      };
+    }
+
     case "ADD_CUSTOM_BLOCK": {
-      if (!message.rule) return { success: false, error: "Rule is required" };
-      userCustomBlocks.add(message.rule.toLowerCase().trim());
+      const rule = BlocklistCore.normalizeRule(message.rule);
+      if (!rule) return { success: false, error: "Not a valid rule" };
+      userCustomBlocks.add(rule);
+      // The allowlist wins over custom blocks, so drop the same rule there or the block would do nothing
+      userAllowlist.delete(rule);
       await BlocklistDB.setUserRules(userAllowlist, userCustomBlocks);
-      return { success: true, count: userCustomBlocks.size };
+      return { success: true, rule, count: userCustomBlocks.size };
     }
 
     case "REMOVE_CUSTOM_BLOCK": {
@@ -407,13 +418,13 @@ async function handleMessage(message) {
     }
 
     case "ADD_ALLOWLIST": {
-      if (!message.rule) return { success: false, error: "Rule is required" };
-      const rule = message.rule.toLowerCase().trim();
+      const rule = BlocklistCore.normalizeRule(message.rule);
+      if (!rule) return { success: false, error: "Not a valid rule" };
       userAllowlist.add(rule);
       // If rule was also in custom blocks, remove it to resolve conflict
       userCustomBlocks.delete(rule);
       await BlocklistDB.setUserRules(userAllowlist, userCustomBlocks);
-      return { success: true, count: userAllowlist.size };
+      return { success: true, rule, count: userAllowlist.size };
     }
 
     case "REMOVE_ALLOWLIST": {
