@@ -7,15 +7,15 @@
 // Load BlocklistCore module
 const isGjs = typeof imports !== "undefined" && imports.gi;
 if (isGjs) {
-  const [okCore, bytesCore] = imports.gi.GLib.file_get_contents("./blocklist-core.js");
+  const [okCore, bytesCore] = imports.gi.GLib.file_get_contents("./src/background/blocklist-core.js");
   eval(new TextDecoder().decode(bytesCore));
 
-  const [okDb, bytesDb] = imports.gi.GLib.file_get_contents("./db.js");
+  const [okDb, bytesDb] = imports.gi.GLib.file_get_contents("./src/background/db.js");
   eval(new TextDecoder().decode(bytesDb));
 }
 
-const Core = globalThis.BlocklistCore || require("../blocklist-core.js");
-const DB = globalThis.BlocklistDB || require("../db.js");
+const Core = globalThis.BlocklistCore || require("../src/background/blocklist-core.js");
+const DB = globalThis.BlocklistDB || require("../src/background/db.js");
 
 let totalTests = 0;
 let passedTests = 0;

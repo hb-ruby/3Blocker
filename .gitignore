@@ -1,2 +1,3 @@
-# Dev dependencies only. Don't ignore blocklist.txt — it's needed at runtime.
+# Dev dependencies and build output only. Don't ignore src/lists/blocklist.txt — it's needed at runtime.
 node_modules/
+dist/

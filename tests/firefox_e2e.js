@@ -15,12 +15,12 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const EXT = path.resolve(__dirname, "..");
+const EXT = path.resolve(__dirname, "..", "src");
 const ADDON_ID = "3blocker@local-addon";
 // Fixed extension UUID so tests know the moz-extension:// origin in advance
 const UUID = "a3b10c4e-0000-4000-8000-3b10c4e3b10c";
 const BASE = `moz-extension://${UUID}/`;
-const BLOCKED = BASE + "blocked.html";
+const BLOCKED = BASE + "blocked/blocked.html";
 
 const results = [];
 const check = (ok, name, extra = "") => {
@@ -98,7 +98,7 @@ async function openExt(file, viewport) {
   const page = await newTab(viewport);
   await page.evaluate((u) => { location.href = u; }, BLOCKED);
   await page.waitForFunction(() => location.protocol === "moz-extension:", { timeout: 10000 });
-  if (file !== "blocked.html") {
+  if (file !== "blocked/blocked.html") {
     await page.evaluate((u) => { location.href = u; }, BASE + file);
     await page.waitForFunction((f) => location.pathname.endsWith(f), { timeout: 10000 }, file);
   }
@@ -128,7 +128,7 @@ async function testBlocking() {
   console.log("\n--- Blocking (Firefox) ---");
   await launch();
 
-  const ext = await openExt("popup.html", { width: 360, height: 640 });
+  const ext = await openExt("popup/popup.html", { width: 360, height: 640 });
   const status = await waitForBlocklist(ext);
   check(status.domainCount > 900000, "Background loaded blocklist", `${status.domainCount} domains${status.err ? ", " + status.err : ""}`);
 
@@ -201,7 +201,7 @@ async function testBlocking() {
 
 // Options page: shows the user's lists and edits them through the same message API
 async function testOptionsPage(ext) {
-  const opts = await openExt("options.html", { width: 900, height: 900 });
+  const opts = await openExt("options/options.html", { width: 900, height: 900 });
   const listed = (id) => opts.evaluate((i) => [...document.querySelectorAll(`#${i} .rule-text`)].map((e) => e.textContent), id);
 
   const blocks = await listed("blocklist-list");

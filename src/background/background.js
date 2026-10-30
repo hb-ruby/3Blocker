@@ -78,13 +78,13 @@ async function initBackground() {
 }
 
 /**
- * Load bundled fallback list from extension package (./blocklist.txt).
+ * Load bundled fallback list from extension package (lists/blocklist.txt).
  */
 async function loadBundledBlocklist() {
   try {
     const fallbackUrl = (typeof browser !== "undefined" && browser.runtime && browser.runtime.getURL)
-      ? browser.runtime.getURL("blocklist.txt")
-      : "blocklist.txt";
+      ? browser.runtime.getURL("lists/blocklist.txt")
+      : "lists/blocklist.txt";
 
     const response = await fetch(fallbackUrl);
     if (!response.ok) {
@@ -114,11 +114,11 @@ async function loadBundledBlocklist() {
 }
 
 /**
- * Load the always-on custom blocks shipped with the extension (./custom-blocklist.txt).
+ * Load the always-on custom blocks shipped with the extension (lists/custom-blocklist.txt).
  */
 async function loadBundledCustomBlocks() {
   try {
-    const response = await fetch(browser.runtime.getURL("custom-blocklist.txt"));
+    const response = await fetch(browser.runtime.getURL("lists/custom-blocklist.txt"));
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -287,7 +287,7 @@ function clearRetryAlarm() {
 /**
  * Request Interception & Redirection:
  * Checks top-level page requests against Allowlist, Custom Blocks, and Main Blocklist.
- * If blocked, the request is redirected to the local blocked.html before anything is sent.
+ * If blocked, the request is redirected to the local blocked/blocked.html before anything is sent.
  * Firefox holds the request while this (async) blocking listener runs, including while a
  * suspended event page wakes up and reloads the lists.
  */
@@ -341,7 +341,7 @@ function checkUrl(url) {
 
 function blockedPageUrl(targetUrl, reason, matchedRule) {
   return browser.runtime.getURL(
-    `blocked.html?url=${encodeURIComponent(targetUrl)}&reason=${encodeURIComponent(reason)}&match=${encodeURIComponent(matchedRule || "")}`
+    `blocked/blocked.html?url=${encodeURIComponent(targetUrl)}&reason=${encodeURIComponent(reason)}&match=${encodeURIComponent(matchedRule || "")}`
   );
 }
 

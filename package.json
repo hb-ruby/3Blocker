@@ -6,8 +6,10 @@
   "scripts": {
     "test": "npm run test:unit && npm run lint && npm run test:firefox",
     "test:unit": "node -e \"globalThis.print = console.log; require('./tests/test_blocklist.js')\"",
-    "lint": "web-ext lint",
-    "test:firefox": "node tests/firefox_e2e.js"
+    "lint": "web-ext lint --config dev/web-ext-config.mjs",
+    "test:firefox": "node tests/firefox_e2e.js",
+    "start": "web-ext run --config dev/web-ext-config.mjs",
+    "build": "web-ext build --config dev/web-ext-config.mjs"
   },
   "devDependencies": {
     "puppeteer-core": "24.29.0",

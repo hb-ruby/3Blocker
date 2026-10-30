@@ -29,27 +29,27 @@
     "<all_urls>"
   ],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "popup/popup.html",
     "default_title": "3Blocker"
   },
   "options_ui": {
-    "page": "options.html",
+    "page": "options/options.html",
     "open_in_tab": true
   },
   "background": {
     "scripts": [
-      "blocklist-core.js",
-      "db.js",
-      "background.js"
+      "background/blocklist-core.js",
+      "background/db.js",
+      "background/background.js"
     ]
   },
   "web_accessible_resources": [
     {
       "resources": [
-        "blocklist.txt",
-        "blocked.html",
-        "blocked.css",
-        "blocked.js"
+        "lists/blocklist.txt",
+        "blocked/blocked.html",
+        "blocked/blocked.css",
+        "blocked/blocked.js"
       ],
       "matches": [
         "<all_urls>"

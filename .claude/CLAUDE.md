@@ -13,20 +13,36 @@ Firefox runs the MV3 background as an event page and unloads it after ~30 s idle
 
 ## Architecture
 
+```
+README.md            only file at the top level (plus package.json / lock, required there by npm)
+.claude/CLAUDE.md    these notes
+src/                 the extension itself — the only folder that gets packaged
+  manifest.json
+  background/        background.js, db.js, blocklist-core.js
+  popup/             popup.html/js/css
+  options/           options.html/js/css
+  blocked/           blocked.html/js/css
+  lists/             blocklist.txt, custom-blocklist.txt
+tests/               unit + Firefox e2e tests
+dev/                 web-ext-config.mjs
+```
+
+All paths in `manifest.json` and `browser.runtime.getURL()` are relative to `src/`.
+
 | File | Role |
 |---|---|
-| `manifest.json` | MV3 manifest. Background loads `blocklist-core.js` → `db.js` → `background.js` in that order (they share globals). |
-| `blocklist-core.js` | Pure logic, no browser APIs. Exposes `BlocklistCore` (global + CommonJS): hostname validation, list parsing, pre-swap validation, user-rule normalization, parent-domain expansion, URL precedence check, backoff calc. |
-| `db.js` | Exposes `BlocklistDB`. IndexedDB `3BlockerDB` (meta store + chunked domain store) with atomic version swap; user rules in `browser.storage.local` (`user_allowlist`, `user_custom_blocks`). Has a mock DB for tests. |
-| `background.js` | Holds in-memory Sets, intercepts top-level requests with blocking `webRequest.onBeforeRequest` and redirects blocked ones to `blocked.html?url=&reason=&match=`. Fetches live list (on start only if never fetched live or >1 day old), daily alarm, exponential-backoff retry alarm. Message API (below). |
-| `popup.html/js/css` | Toolbar popup: sync status card + "refresh now", current-tab block slider. |
-| `options.html/js/css` | Options page (`options_ui`, opens in a tab from the popup's list button): shows the user's custom blocklist and allowlist, add/remove rules, live-updates on `storage.onChanged`. |
-| `blocked.html/js/css` | Block page: shows URL, reason, matched rule; "Go back" and "Allow site" (adds allowlist rule, then redirects). |
-| `blocklist.txt` | ~18 MB bundled fallback list, committed to git (required at runtime — listed in `web_accessible_resources`). |
-| `custom-blocklist.txt` | Hand-written, always-on block rules shipped with the extension (Reddit sign-up and `type=media` search). Never touched by the live refresh. Edit it and reload the add-on to change them. |
-| `tests/test_blocklist.js` | Unit tests for core + DB API surface (uses `print`, works under `gjs` or Node). |
-| `tests/firefox_e2e.js` | End-to-end tests in real headless Firefox (Puppeteer over WebDriver BiDi). |
-| `package.json`, `web-ext-config.mjs` | Dev-only: test/lint scripts and dev dependencies; web-ext config keeps dev files out of the extension. The extension itself has no dependencies. |
+| `src/manifest.json` | MV3 manifest. Background loads `background/blocklist-core.js` → `db.js` → `background.js` in that order (they share globals). |
+| `background/blocklist-core.js` | Pure logic, no browser APIs. Exposes `BlocklistCore` (global + CommonJS): hostname validation, list parsing, pre-swap validation, user-rule normalization, parent-domain expansion, URL precedence check, backoff calc. |
+| `background/db.js` | Exposes `BlocklistDB`. IndexedDB `3BlockerDB` (meta store + chunked domain store) with atomic version swap; user rules in `browser.storage.local` (`user_allowlist`, `user_custom_blocks`). Has a mock DB for tests. |
+| `background/background.js` | Holds in-memory Sets, intercepts top-level requests with blocking `webRequest.onBeforeRequest` and redirects blocked ones to `blocked/blocked.html?url=&reason=&match=`. Fetches live list (on start only if never fetched live or >1 day old), daily alarm, exponential-backoff retry alarm. Message API (below). |
+| `popup/` | Toolbar popup: sync status card + "refresh now", current-tab block slider, list button opens the options page. |
+| `options/` | Options page (`options_ui`, opens in a tab): shows the user's custom blocklist and allowlist, add/remove rules, live-updates on `storage.onChanged`. |
+| `blocked/` | Block page: shows URL, reason, matched rule; "Go back" and "Allow site" (adds allowlist rule, then redirects). |
+| `lists/blocklist.txt` | ~18 MB bundled fallback list, committed to git (required at runtime — listed in `web_accessible_resources`). |
+| `lists/custom-blocklist.txt` | Hand-written, always-on block rules shipped with the extension (Reddit sign-up and `type=media` search). Never touched by the live refresh. Edit it and reload the add-on to change them. |
+| `tests/test_blocklist.js` | Unit tests for core + DB API surface (uses `print`, works under `gjs` from the repo root, or Node). |
+| `tests/firefox_e2e.js` | End-to-end tests in real headless Firefox (Puppeteer over WebDriver BiDi), installs `src/`. |
+| `package.json`, `dev/web-ext-config.mjs` | Dev-only: npm scripts and dev dependencies; web-ext config sets `sourceDir: "src"` and `artifactsDir: "dist"` (gitignored). The npm scripts pass `--config dev/web-ext-config.mjs`, since web-ext only auto-finds it in the current folder. The extension itself has no dependencies. |
 
 ## Blocking rules
 
@@ -58,6 +74,8 @@ Adds run the rule through `BlocklistCore.normalizeRule` (lowercase, trim, strip 
 npm install          # once: dev deps (puppeteer-core, web-ext)
 npm test             # unit tests -> web-ext lint -> Firefox e2e
 npm run test:unit | npm run lint | npm run test:firefox
+npm start            # web-ext run: launch Firefox with the extension loaded
+npm run build        # web-ext build: zip src/ into dist/
 ```
 
 - `test:firefox` needs Firefox ≥ 140 and network access. `FIREFOX_BIN` picks the binary (default `firefox` on PATH); `SCREENSHOT_DIR` saves popup/block-page screenshots. Each run uses a fresh temp profile.
@@ -68,6 +86,7 @@ npm run test:unit | npm run lint | npm run test:firefox
 ## Changelog
 
 <!-- Newest first. One line per meaningful change. -->
+- 2026-10-30 — Restructured: extension in `src/` (per-part folders `background/ popup/ options/ blocked/ lists/`), notes in `.claude/CLAUDE.md`, web-ext config in `dev/` (now just `sourceDir: src`, no ignore list). Added `npm start` / `npm run build`; `dist/` gitignored.
 - 2026-10-30 — Added the options page (`options.html/js/css`, `options_ui` in the manifest), opened by the popup's list button: view, add and remove custom block and allowlist rules. New `GET_USER_RULES` message; adds are validated with `normalizeRule`, and adding a custom block now drops the same rule from the allowlist. Unit + e2e tests for it. E2E now finds `firefox` on PATH itself (Puppeteer needs an absolute path).
 - 2026-10-28 — Saved the Firefox e2e tests in `tests/firefox_e2e.js` (incl. idle-unload check) and added `package.json` so `npm test` runs unit tests, lint and Firefox e2e. Unit tests now exit non-zero on failure. Added `.gitignore` (node_modules only) and `web-ext-config.mjs`.
 - 2026-10-28 — Added wildcard (`*`) rules, bundled `custom-blocklist.txt` (Reddit `/register`, `/account/register`, `reddit.com*type=media*`), and pushState navigation blocking via `webNavigation.onHistoryStateUpdated`. Tests for wildcard matching.
