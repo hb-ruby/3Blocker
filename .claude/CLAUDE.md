@@ -39,7 +39,7 @@ All paths in `manifest.json` and `browser.runtime.getURL()` are relative to `src
 | `options/` | Options page (`options_ui`, opens in a tab): shows the user's custom blocklist and allowlist, add/remove rules, live-updates on `storage.onChanged`. |
 | `blocked/` | Block page: shows URL, reason, matched rule; "Go back" and "Allow site" (adds allowlist rule, then redirects). |
 | `lists/blocklist.txt` | ~18 MB bundled fallback list, committed to git (required at runtime — listed in `web_accessible_resources`). |
-| `lists/custom-blocklist.txt` | Hand-written, always-on block rules shipped with the extension (Reddit sign-up and `type=media` search). Never touched by the live refresh. Edit it and reload the add-on to change them. |
+| `lists/custom-blocklist.txt` | Hand-written, always-on block rules shipped with the extension (currently all of Reddit: `reddit.com`, `redd.it`). Never touched by the live refresh. Edit it and reload the add-on to change them. |
 | `tests/test_blocklist.js` | Unit tests for core + DB API surface (uses `print`, works under `gjs` from the repo root, or Node). |
 | `tests/firefox_e2e.js` | End-to-end tests in real headless Firefox (Puppeteer over WebDriver BiDi), installs `src/`. |
 | `package.json`, `dev/web-ext-config.mjs` | Dev-only: npm scripts and dev dependencies; web-ext config sets `sourceDir: "src"` and `artifactsDir: "dist"` (gitignored). The npm scripts pass `--config dev/web-ext-config.mjs`, since web-ext only auto-finds it in the current folder. The extension itself has no dependencies. |
@@ -79,13 +79,14 @@ npm run build        # web-ext build: zip src/ into dist/
 ```
 
 - `test:firefox` needs Firefox ≥ 140 and network access. `FIREFOX_BIN` picks the binary (default `firefox` on PATH); `SCREENSHOT_DIR` saves popup/block-page screenshots. Each run uses a fresh temp profile.
-- E2E covers: list load, popup styling, main-list domain/subdomain blocking, block page details, custom block, options page (list/add/remove/invalid input/live update), "Allow this site", allowlist precedence, bundled Reddit rules, pushState blocking, no console errors, and blocking after Firefox unloads the idle event page.
+- E2E covers: list load, popup styling, main-list domain/subdomain blocking, block page details, custom block, options page (list/add/remove/invalid input/live update), "Allow this site", allowlist precedence, bundled Reddit block, pushState blocking, no console errors, and blocking after Firefox unloads the idle event page.
 - WebDriver BiDi quirks the e2e works around: scripting extension pages needs `MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1`; it can't navigate directly to `moz-extension://` URLs (hop via the web-accessible `blocked.html`); a tab showing an extension page can't be navigated away (use a new tab per step); `page.url()` misses extension redirects (read `location.href`).
 - Dev machine has system Node 20 / npm 9 and Firefox ESR 153 (`/usr/bin/firefox`), installed via apt. `npm test` works with no env vars.
 
 ## Changelog
 
 <!-- Newest first. One line per meaningful change. -->
+- 2026-10-30 — `custom-blocklist.txt` now blocks Reddit completely (`reddit.com`, `redd.it`) instead of only sign-up and media search. Wildcard rule support is unchanged (still unit-tested).
 - 2026-10-30 — Restructured: extension in `src/` (per-part folders `background/ popup/ options/ blocked/ lists/`), notes in `.claude/CLAUDE.md`, web-ext config in `dev/` (now just `sourceDir: src`, no ignore list). Added `npm start` / `npm run build`; `dist/` gitignored.
 - 2026-10-30 — Added the options page (`options.html/js/css`, `options_ui` in the manifest), opened by the popup's list button: view, add and remove custom block and allowlist rules. New `GET_USER_RULES` message; adds are validated with `normalizeRule`, and adding a custom block now drops the same rule from the allowlist. Unit + e2e tests for it. E2E now finds `firefox` on PATH itself (Puppeteer needs an absolute path).
 - 2026-10-28 — Saved the Firefox e2e tests in `tests/firefox_e2e.js` (incl. idle-unload check) and added `package.json` so `npm test` runs unit tests, lint and Firefox e2e. Unit tests now exit non-zero on failure. Added `.gitignore` (node_modules only) and `web-ext-config.mjs`.

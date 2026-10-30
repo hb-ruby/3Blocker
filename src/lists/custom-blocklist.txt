@@ -4,9 +4,7 @@
 # domain/path?query for the domain and each parent domain, so "reddit.com/..." also
 # covers www.reddit.com, old.reddit.com, etc.
 
-# Reddit account sign-up (browse Reddit without an account)
-reddit.com/register*
-reddit.com/account/register*
-
-# Reddit media search results (NSFW gifs can autoplay there)
-reddit.com*type=media*
+# Reddit, completely (www., old., new., np., etc. are covered as subdomains)
+reddit.com
+# Reddit short links and media hosts (redd.it, i.redd.it, v.redd.it, preview.redd.it)
+redd.it

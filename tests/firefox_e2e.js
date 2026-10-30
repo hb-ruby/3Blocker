@@ -169,15 +169,19 @@ async function testBlocking() {
   check(ph.blocked === false, "Allowlist overrides the main blocklist", JSON.stringify(ph));
   await send(ext, { type: "REMOVE_ALLOWLIST", rule: "pornhub.com" });
 
-  // Bundled custom-blocklist.txt rules (Reddit sign-up and media search)
-  r = await visit("https://www.reddit.com/register/");
-  check(r.url.startsWith(BLOCKED) && r.url.includes("reason=custom_block"), "Reddit sign-up page is blocked", r.url.slice(0, 120));
-  r = await visit("https://old.reddit.com/register?dest=https%3A%2F%2Fold.reddit.com%2F");
-  check(r.url.startsWith(BLOCKED), "Old Reddit sign-up is blocked", r.url.slice(0, 120));
-  r = await visit("https://www.reddit.com/search/?q=cats&type=media");
-  check(r.url.startsWith(BLOCKED) && decodeURIComponent(r.url).includes("match=reddit.com*type=media*"), "Reddit media search is blocked", decodeURIComponent(r.url).slice(0, 140));
-  r = await visit("https://www.reddit.com/search/?q=cats&type=link");
-  check(r.url.startsWith("https://www.reddit.com/"), "Reddit post search still loads", r.url.slice(0, 80));
+  // Bundled custom-blocklist.txt rules (Reddit blocked completely)
+  for (const url of ["https://www.reddit.com/", "https://old.reddit.com/r/technology/", "https://reddit.com/search/?q=cats", "https://i.redd.it/example.jpg"]) {
+    r = await visit(url);
+    check(r.url.startsWith(BLOCKED) && r.url.includes("reason=custom_block"), `Bundled rule blocks ${url}`, r.url.slice(0, 120));
+  }
+
+  // Allowlisting a bundled rule only overrides it; removing the allowlist entry restores the block
+  await send(ext, { type: "ADD_ALLOWLIST", rule: "reddit.com" });
+  let rd = await send(ext, { type: "CHECK_URL", url: "https://www.reddit.com/" });
+  check(!rd.blocked && rd.reason === "allowlisted", "Allowlist overrides a bundled rule", JSON.stringify(rd));
+  await send(ext, { type: "REMOVE_ALLOWLIST", rule: "reddit.com" });
+  rd = await send(ext, { type: "CHECK_URL", url: "https://www.reddit.com/" });
+  check(rd.blocked && rd.reason === "custom_block" && rd.matchedRule === "reddit.com", "Bundled rule applies again after removing the allowlist entry", JSON.stringify(rd));
 
   // In-page (pushState) navigation to a blocked URL. example.com was allowlisted above,
   // and the allowlist overrides every block rule, so remove that first.
