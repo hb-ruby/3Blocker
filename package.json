@@ -9,7 +9,8 @@
     "lint": "web-ext lint --config dev/web-ext-config.mjs",
     "test:firefox": "node tests/firefox_e2e.js",
     "start": "web-ext run --config dev/web-ext-config.mjs",
-    "build": "web-ext build --config dev/web-ext-config.mjs"
+    "build": "web-ext build --config dev/web-ext-config.mjs",
+    "sign": "node --env-file=.env node_modules/web-ext/bin/web-ext.js sign --config dev/web-ext-config.mjs"
   },
   "devDependencies": {
     "puppeteer-core": "24.29.0",

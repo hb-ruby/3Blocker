@@ -1,3 +1,7 @@
 # Dev dependencies and build output only. Don't ignore src/lists/blocklist.txt — it's needed at runtime.
 node_modules/
 dist/
+# AMO API credentials for `npm run sign` — never commit
+.env
+# web-ext sign upload tracking (machine-specific)
+.amo-upload-uuid

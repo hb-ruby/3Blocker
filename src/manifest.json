@@ -5,7 +5,7 @@
   "description": "Blocks adult websites and allows adding custom websites to a blocklist.",
   "browser_specific_settings": {
     "gecko": {
-      "id": "3blocker@local-addon",
+      "id": "3blocker@hb-ruby",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": ["none"]

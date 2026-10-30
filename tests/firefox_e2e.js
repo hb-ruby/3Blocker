@@ -16,7 +16,7 @@ const os = require("os");
 const path = require("path");
 
 const EXT = path.resolve(__dirname, "..", "src");
-const ADDON_ID = "3blocker@local-addon";
+const ADDON_ID = "3blocker@hb-ruby";
 // Fixed extension UUID so tests know the moz-extension:// origin in advance
 const UUID = "a3b10c4e-0000-4000-8000-3b10c4e3b10c";
 const BASE = `moz-extension://${UUID}/`;

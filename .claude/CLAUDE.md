@@ -75,7 +75,14 @@ npm test             # unit tests -> web-ext lint -> Firefox e2e
 npm run test:unit | npm run lint | npm run test:firefox
 npm start            # web-ext run: launch Firefox with the extension loaded
 npm run build        # web-ext build: zip src/ into dist/
+npm run sign         # AMO unlisted signing -> signed .xpi in dist/
 ```
+
+## Signing / private install
+
+- Add-on ID `3blocker@hb-ruby` is permanent: storage (user rules) is tied to it, and AMO owns it under the user's account.
+- `npm run sign` = `web-ext sign` with `channel: "unlisted"` (in `dev/web-ext-config.mjs`): AMO validates and signs, never lists publicly. Credentials come from `.env` (gitignored; template in `.env.example`) via `node --env-file`. **Never read or print `.env`.**
+- Each signing needs a new `version` in `src/manifest.json` (AMO rejects re-signing a version). Install the `.xpi` via `about:addons` → gear → Install Add-on From File; same ID keeps the user's rules.
 
 - `test:firefox` needs Firefox ≥ 140 and network access. `FIREFOX_BIN` picks the binary (default `firefox` on PATH); `SCREENSHOT_DIR` saves popup/block-page screenshots. Each run uses a fresh temp profile.
 - E2E covers: list load, popup styling, main-list domain/subdomain blocking, block page details, custom block, options page (list/add/remove/invalid input/live update), "Allow this site", allowlist precedence, pushState blocking, no console errors, and blocking after Firefox unloads the idle event page.
@@ -85,6 +92,7 @@ npm run build        # web-ext build: zip src/ into dist/
 ## Changelog
 
 <!-- Newest first. One line per meaningful change. -->
+- 2026-10-30 — Add-on ID changed to `3blocker@hb-ruby` (permanent). Added `npm run sign` (AMO unlisted), `.env.example`, `.env` gitignored. v1.0.0 signed and installed privately.
 - 2026-10-30 — Removed the bundled `custom-blocklist.txt` and its code (`loadBundledCustomBlocks`, `extraBlocks`, `parseRuleList`): the user's own blocklist covers it, and the allowlist overrode it anyway. Precedence is now three tiers. Wildcard rules still work in user rules. Next: delay on loosening actions (allow / remove block).
 - 2026-10-30 — `custom-blocklist.txt` now blocks Reddit completely (`reddit.com`, `redd.it`) instead of only sign-up and media search. Wildcard rule support is unchanged (still unit-tested).
 - 2026-10-30 — Restructured: extension in `src/` (per-part folders `background/ popup/ options/ blocked/ lists/`), notes in `.claude/CLAUDE.md`, web-ext config in `dev/` (now just `sourceDir: src`, no ignore list). Added `npm start` / `npm run build`; `dist/` gitignored.
