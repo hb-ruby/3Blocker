@@ -3,19 +3,6 @@
 A simple Firefox extension that blocks adult websites, plus any other sites you add yourself.
 It only blocks: there are no timers, schedules or statistics.
 
-To install, clone the repo and build a signed `.xpi` (needs Firefox 140+ and Node 20+):
-
-1. `git clone https://github.com/hb-ruby/3Blocker.git && cd 3Blocker && npm install`
-2. Put your [AMO API keys](https://addons.mozilla.org/developers/addon/api/key/) in a `.env` file as
-   `WEB_EXT_API_KEY=…` and `WEB_EXT_API_SECRET=…`. If you're not the owner of this add-on, also change
-   the add-on ID (`browser_specific_settings.gecko.id`) in `src/manifest.json` to one of your own.
-3. Run `npm run sign`. Mozilla signs it privately (it isn't published on addons.mozilla.org)
-   and the signed `.xpi` lands in `dist/`.
-4. In Firefox, open `about:addons` → gear icon → **Install Add-on From File…** and pick the `.xpi`.
-
-Updating works the same way: raise `version` in `src/manifest.json`, sign again and install over
-the old one. Your own rules are kept.
-
 ## Usage
 
 The main blocklist is the [Block List Project](https://blocklistproject.github.io/Lists/) porn list
@@ -63,6 +50,21 @@ blocking works offline and before the first download.
 - Sites that change their address without reloading the page (common on modern web apps)
   are checked too, and redirected to the block page if needed.
 - Pop-ups inside a page that don't change the address can't be blocked.
+
+## Install
+
+To install, clone the repo and build a signed `.xpi` (needs Firefox 140+ and Node 20+):
+
+1. `git clone https://github.com/hb-ruby/3Blocker.git && cd 3Blocker && npm install`
+2. Put your [AMO API keys](https://addons.mozilla.org/developers/addon/api/key/) in a `.env` file as
+   `WEB_EXT_API_KEY=…` and `WEB_EXT_API_SECRET=…`. If you're not the owner of this add-on, also change
+   the add-on ID (`browser_specific_settings.gecko.id`) in `src/manifest.json` to one of your own.
+3. Run `npm run sign`. Mozilla signs it privately (it isn't published on addons.mozilla.org)
+   and the signed `.xpi` lands in `dist/`.
+4. In Firefox, open `about:addons` → gear icon → **Install Add-on From File…** and pick the `.xpi`.
+
+Updating works the same way: raise `version` in `src/manifest.json`, sign again and install over
+the old one. Your own rules are kept.
 
 ### Development and license
 
