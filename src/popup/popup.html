@@ -47,65 +47,37 @@
       <span class="site-badge" id="site-block-state">Allowed</span>
     </section>
 
-    <!-- Domain Level Selector Slider (The 3Blocker Slider) -->
-    <section class="control-card slider-section">
-      <div class="section-header">
-        <div class="section-title-wrap">
-          <span class="section-icon" aria-hidden="true"></span>
-          <span class="section-title">Block Level</span>
+    <!-- Block this site / this page -->
+    <section class="control-card block-card">
+      <div class="block-option">
+        <div class="option-target">
+          <span class="option-rule" id="site-rule">—</span>
+          <span class="option-scope">+ all subdomains</span>
         </div>
-        <span class="level-pill" id="level-pill">Level 2 &bull; Subdomain</span>
+        <button class="action-btn block-btn" id="btn-block-site">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+          </svg>
+          <span>Block site</span>
+        </button>
       </div>
 
-      <!-- Stepped Slider -->
-      <div class="slider-wrapper">
-        <input 
-          type="range" 
-          id="domain-level-slider" 
-          min="1" 
-          max="3" 
-          step="1" 
-          value="2" 
-          aria-label="Domain level slider"
-        >
-        <div class="slider-ticks">
-          <div class="tick-mark" data-step="1">
-            <span class="tick-dot"></span>
-            <span class="tick-label">Page</span>
-          </div>
-          <div class="tick-mark active" data-step="2">
-            <span class="tick-dot"></span>
-            <span class="tick-label">Subdomain</span>
-          </div>
-          <div class="tick-mark" data-step="3">
-            <span class="tick-dot"></span>
-            <span class="tick-label">Root Domain</span>
-          </div>
+      <div class="block-option">
+        <div class="option-target">
+          <span class="option-rule" id="page-rule">—</span>
+          <span class="option-scope">this exact page</span>
         </div>
+        <button class="action-btn page-btn" id="btn-block-page">
+          <span>Block page</span>
+        </button>
       </div>
 
-      <!-- Preview of What Will Be Blocked -->
-      <div class="block-preview-box">
-        <div class="preview-label">Target to block:</div>
-        <div class="preview-target" id="preview-target-text">
-          <span class="target-protocol">https://</span><span class="target-highlight" id="target-highlight">sub.example.com/*</span>
-        </div>
-        <div class="preview-description" id="preview-desc">
-          Blocks all pages under this specific subdomain only.
-        </div>
-      </div>
-
-      <!-- Block Action Button -->
-      <button class="action-btn block-btn" id="btn-block-level">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-        </svg>
-        <span id="btn-block-text">Block Selected Level</span>
-      </button>
+      <p class="block-note" id="block-note" hidden></p>
     </section>
   </div>
 
+  <script src="../background/blocklist-core.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

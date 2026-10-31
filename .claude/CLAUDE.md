@@ -35,7 +35,7 @@ All paths in `manifest.json` and `browser.runtime.getURL()` are relative to `src
 | `background/blocklist-core.js` | Pure logic, no browser APIs. Exposes `BlocklistCore` (global + CommonJS): hostname validation, list parsing, pre-swap validation, user-rule normalization, parent-domain expansion, URL precedence check, backoff calc. |
 | `background/db.js` | Exposes `BlocklistDB`. IndexedDB `3BlockerDB` (meta store + chunked domain store) with atomic version swap; user rules in `browser.storage.local` (`user_allowlist`, `user_custom_blocks`). Has a mock DB for tests. |
 | `background/background.js` | Holds in-memory Sets, intercepts top-level requests with blocking `webRequest.onBeforeRequest` and redirects blocked ones to `blocked/blocked.html?url=&reason=&match=`. Fetches live list (on start only if never fetched live or >1 day old), daily alarm, exponential-backoff retry alarm. Message API (below). |
-| `popup/` | Toolbar popup: current-tab block slider; list button (header, next to "Active") opens the options page. |
+| `popup/` | Toolbar popup: "Block site" / "Block page" for the current tab (also loads `background/blocklist-core.js` for `popupRulesForUrl`); list button (header, next to "Active") opens the options page. Only adds blocks, never unblocks. |
 | `options/` | Options page (`options_ui`, opens in a tab): shows the user's custom blocklist and allowlist, add/remove rules, live-updates on `storage.onChanged`. Main blocklist card: domain count, status, last check, "Refresh now" (`REFRESH_BLOCKLIST_NOW`). |
 | `blocked/` | Block page: shows URL, reason, matched rule; "Go back" and "Allow site" (adds allowlist rule, then redirects). |
 | `lists/blocklist.txt` | ~18 MB bundled fallback list, committed to git (required at runtime — listed in `web_accessible_resources`). |
@@ -51,7 +51,7 @@ Besides page requests, `webNavigation.onHistoryStateUpdated` catches single-page
 
 Blocklist source: `https://blocklistproject.github.io/Lists/alt-version/porn-nl.txt`, fetched with ETag/If-Modified-Since. A download is rejected if empty, <50% of current size, >2% junk lines (and >50 invalid), or looks like HTML. Backoff: 5 min × 2^n, capped at 24 h.
 
-Popup slider levels: 1 = exact page (`host+path`), 2 = this host/subdomain, 3 = apex domain.
+Popup buttons (`BlocklistCore.popupRulesForUrl`): **Block site** = the host with a leading `www.` stripped (`www.reddit.com` → `reddit.com`, covering all subdomains; `old.reddit.com` stays as is; never cut down to a bare suffix, so `www.bbc.co.uk` → `bbc.co.uk`). **Block page** = exact `host/path?query` (query kept, fragment dropped). After adding, the popup reloads the tab so it lands on the block page. Disabled on non-http(s) pages and on the block page (which shows the original URL). If an allowlist rule still overrides the new block, the popup says so.
 
 ## Message API (`browser.runtime.sendMessage`)
 
@@ -62,7 +62,7 @@ Adds run the rule through `BlocklistCore.normalizeRule` (lowercase, trim, strip 
 ## Current state / known gaps
 
 - Scope is deliberately just blocking sites (no time limits or other features); keep it simple.
-- The popup's root-domain guess is the last two labels, so e.g. `bbc.co.uk` becomes `co.uk`.
+- "Block site" from a non-`www` subdomain (e.g. `old.reddit.com`) blocks only that subdomain.
 - No Chrome support yet (would need `service_worker` background and `chrome.*` / polyfill).
 
 ## Testing
@@ -81,17 +81,19 @@ npm run sign         # AMO unlisted signing -> signed .xpi in dist/
 ## Signing / private install
 
 - Add-on ID `3blocker@hb-ruby` is permanent: storage (user rules) is tied to it, and AMO owns it under the user's account.
-- `npm run sign` = `web-ext sign` with `channel: "unlisted"` (in `dev/web-ext-config.mjs`): AMO validates and signs, never lists publicly. Credentials come from `.env` (gitignored; template in `.env.example`) via `node --env-file`. **Never read or print `.env`.**
+- `npm run sign` = `web-ext sign` with `channel: "unlisted"` (in `dev/web-ext-config.mjs`): AMO validates and signs, never lists publicly. Credentials come from `.env` (gitignored, kept only on the dev machine) via `node --env-file`. **Never read or print `.env`.**
 - Each signing needs a new `version` in `src/manifest.json` (AMO rejects re-signing a version). Install the `.xpi` via `about:addons` → gear → Install Add-on From File; same ID keeps the user's rules.
 
 - `test:firefox` needs Firefox ≥ 140 and network access. `FIREFOX_BIN` picks the binary (default `firefox` on PATH); `SCREENSHOT_DIR` saves popup/block-page screenshots. Each run uses a fresh temp profile.
-- E2E covers: list load, popup styling, main-list domain/subdomain blocking, block page details, custom block, options page (list/add/remove/invalid input/live update, main-list count + "Refresh now"), "Allow this site", allowlist precedence, pushState blocking, no console errors, and blocking after Firefox unloads the idle event page.
+- E2E covers: list load, popup layout and Block site / Block page (rules, tab sent to block page, disabled on non-web and block pages), main-list domain/subdomain blocking, block page details, custom block, options page (list/add/remove/invalid input/live update, main-list count + "Refresh now"), "Allow this site", allowlist precedence, pushState blocking, no console errors, and blocking after Firefox unloads the idle event page.
 - WebDriver BiDi quirks the e2e works around: scripting extension pages needs `MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1`; it can't navigate directly to `moz-extension://` URLs (hop via the web-accessible `blocked.html`); a tab showing an extension page can't be navigated away (use a new tab per step); `page.url()` misses extension redirects (read `location.href`).
 - Dev machine has system Node 20 / npm 9 and Firefox ESR 153 (`/usr/bin/firefox`), installed via apt. `npm test` works with no env vars.
 
 ## Changelog
 
 <!-- Newest first. One line per meaningful change. -->
+- 2026-10-31 — Replaced the popup's 3-level block slider (and its unblock toggle) with two buttons: "Block site" (host without `www.`) and "Block page" (exact address incl. query). Rule logic in `BlocklistCore.popupRulesForUrl` (unit-tested); popup reloads the tab onto the block page. E2E drives the popup against real tabs. Removed the root-domain guess (and its `co.uk` problem).
+- 2026-10-31 — Removed `.env.example` (no longer needed); signing credentials live only in the local, gitignored `.env`.
 - 2026-10-31 — Removed the popup's "Sites Blocked" footer; the list/options button moved into the header next to the "Active" status. E2E checks the footer is gone and the button is in the header.
 - 2026-10-31 — v1.0.1. Moved the main blocklist status card (domain count, status, last check, "Refresh now") from the popup to the options page. Popup keeps the "Sites Blocked" count. E2E checks the popup card is gone and the options-page refresh works. Private windows: Firefox only supports spanning mode, so one background and one `storage.local` serve both; rules are shared (kept as is).
 - 2026-10-30 — Add-on ID changed to `3blocker@hb-ruby` (permanent). Added `npm run sign` (AMO unlisted), `.env.example`, `.env` gitignored. v1.0.0 signed and installed privately.

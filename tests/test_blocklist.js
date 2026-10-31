@@ -50,6 +50,7 @@ function runTests() {
   testAtomicSwap();
   testWildcardRules();
   testNormalizeRule();
+  testPopupRules();
 
   print("\n==========================================");
   print(`Results: ${passedTests}/${totalTests} tests passed.`);
@@ -301,6 +302,27 @@ function testNormalizeRule() {
   assertEqual(Core.normalizeRule("exa mple.com"), null, "Rejects rules containing spaces");
   assertEqual(Core.normalizeRule("com"), null, "Rejects a bare word that can never match");
   assertEqual(Core.normalizeRule(null), null, "Rejects non-strings");
+}
+
+function testPopupRules() {
+  print("\n--- Popup block site / block page rules ---");
+  const r = (url) => JSON.stringify(Core.popupRulesForUrl(url));
+  const rules = (site, page) => JSON.stringify({ site, page });
+  assertEqual(r("https://www.reddit.com/r/foo?sort=new#top"), rules("reddit.com", "www.reddit.com/r/foo?sort=new"),
+    "www. is stripped for the site; the page keeps the query and drops the fragment");
+  assertEqual(r("https://old.reddit.com/"), rules("old.reddit.com", "old.reddit.com/"), "Other subdomains are kept as is");
+  assertEqual(r("https://x.com/home"), rules("x.com", "x.com/home"), "A bare domain stays the same");
+  assertEqual(r("https://www.bbc.co.uk/news"), rules("bbc.co.uk", "www.bbc.co.uk/news"), "Multi-part suffixes are never cut down to the suffix");
+  assertEqual(r("https://www.YouTube.com/watch?v=AbC"), rules("youtube.com", "www.youtube.com/watch?v=abc"), "Rules are lowercased like typed rules");
+  assertEqual(r("http://www.com/"), rules("www.com", "www.com/"), "www. is not stripped if only a TLD would be left");
+  assertEqual(r("about:newtab"), "null", "Non-web pages can't be blocked");
+  assertEqual(r("moz-extension://abc/popup/popup.html"), "null", "Extension pages can't be blocked");
+  assertEqual(r("http://localhost:8080/"), "null", "Hosts without a dot can't be blocked");
+
+  const stores = { allowlist: [], customBlocks: ["reddit.com", "www.youtube.com/watch?v=abc"], mainBlocklistSet: new Set() };
+  assert(Core.checkUrlPrecedence("https://old.reddit.com/r/x", stores).blocked, "A site rule blocks the other subdomains");
+  assert(Core.checkUrlPrecedence("https://www.youtube.com/watch?v=abc", stores).blocked, "A page rule blocks that page");
+  assert(!Core.checkUrlPrecedence("https://www.youtube.com/watch?v=xyz", stores).blocked, "A page rule leaves other queries open");
 }
 
 // Execute tests

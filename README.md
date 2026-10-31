@@ -42,7 +42,7 @@ adding it to one removes it from the other.
 | List | Where it comes from | Can you change it? |
 |---|---|---|
 | Your allowlist | "Allow this site" on the block page, or the options page | Yes |
-| Your blocklist | The popup's block slider, or the options page | Yes |
+| Your blocklist | The popup's "Block site" / "Block page" buttons, or the options page | Yes |
 | Adult site list | [Block List Project](https://blocklistproject.github.io/Lists/) porn list, refreshed daily (or with "Refresh now" on the options page); a bundled copy is used until the first download | No |
 
 ### How a rule matches

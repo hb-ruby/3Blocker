@@ -133,8 +133,6 @@ async function testBlocking() {
   check(status.domainCount > 900000, "Background loaded blocklist", `${status.domainCount} domains${status.err ? ", " + status.err : ""}`);
 
   await screenshot(ext, "popup.png");
-  const appearance = await ext.evaluate(() => getComputedStyle(document.getElementById("domain-level-slider")).appearance);
-  check(appearance === "none", "Popup slider uses custom styling in Firefox", appearance);
   const syncCard = await ext.evaluate(() => !!document.getElementById("btn-refresh-blocklist"));
   check(!syncCard, "Popup no longer shows the main blocklist card");
   const layout = await ext.evaluate(() => ({
@@ -191,9 +189,75 @@ async function testBlocking() {
   check(spa.url.startsWith(BLOCKED), "pushState to a blocked URL redirects to block page", `${spa.ms} ms`);
 
   await testOptionsPage(ext);
+  await testPopupBlocking(ext);
 
   check(consoleErrors.length === 0, "No errors in extension pages", consoleErrors.join(" | ").slice(0, 300));
   await browser.close();
+}
+
+// The popup acts on the active tab. Opened as a tab it is the active tab itself, so to point it at
+// another tab: make the newest tab whose URL starts with `urlPrefix` active, then reload the popup
+// tab (now in the background) and read what it shows.
+async function popupFor(popup, urlPrefix) {
+  await popup.evaluate(async (prefix) => {
+    const tabs = await browser.tabs.query({});
+    const target = tabs.filter((t) => t.url.startsWith(prefix)).sort((x, y) => y.id - x.id)[0];
+    await browser.tabs.update(target.id, { active: true });
+  }, urlPrefix);
+  await popup.evaluate(() => location.reload());
+  await popup.waitForFunction(() => document.readyState === "complete", { timeout: 10000 });
+  await sleep(800); // let the popup's async init (tab query + CHECK_URL) finish
+  return popup.evaluate(() => ({
+    host: document.getElementById("current-host").textContent,
+    badge: document.getElementById("site-block-state").textContent,
+    site: document.getElementById("site-rule").textContent,
+    page: document.getElementById("page-rule").textContent,
+    disabled: document.getElementById("btn-block-site").disabled && document.getElementById("btn-block-page").disabled,
+    note: document.getElementById("block-note").hidden ? "" : document.getElementById("block-note").textContent
+  }));
+}
+
+// Popup: "Block site" (host without www.) and "Block page" (exact address incl. query)
+async function testPopupBlocking(ext) {
+  const popup = await openExt("popup/popup.html", { width: 360, height: 640 });
+  let state = await popup.evaluate(() => ({
+    slider: !!document.getElementById("domain-level-slider"),
+    disabled: document.getElementById("btn-block-site").disabled && document.getElementById("btn-block-page").disabled,
+    note: document.getElementById("block-note").textContent
+  }));
+  check(!state.slider, "Popup has no block-level slider");
+  check(state.disabled && state.note.length > 0, "Popup can't block non-web pages (buttons disabled)", state.note);
+
+  const pageTab = await visit("https://www.example.net/?from=popup");
+  state = await popupFor(popup, "https://www.example.net/?from=popup");
+  check(state.site === "example.net" && state.page === "www.example.net/?from=popup" && !state.disabled,
+    "Popup offers the site without www. and the exact page with its query", JSON.stringify(state));
+  await screenshot(popup, "popup.png");
+
+  await popup.evaluate(() => document.getElementById("btn-block-page").click());
+  const landed = await waitForLanding(pageTab.page, 10000);
+  check(landed.url.startsWith(BLOCKED) && landed.url.includes("match=" + encodeURIComponent("www.example.net/?from=popup")),
+    "'Block page' saves the page rule and sends the tab to the block page", landed.url.slice(0, 160));
+  let r = await visit("https://www.example.net/?from=elsewhere");
+  check(r.url.startsWith("https://www.example.net"), "A page block leaves the same path with another query open", r.url);
+
+  state = await popupFor(popup, "https://www.example.net/?from=elsewhere");
+  await popup.evaluate(() => document.getElementById("btn-block-site").click());
+  const siteLanded = await waitForLanding(r.page, 10000);
+  check(siteLanded.url.startsWith(BLOCKED) && siteLanded.url.includes("match=example.net"),
+    "'Block site' saves the host without www. and sends the tab to the block page", siteLanded.url.slice(0, 160));
+  r = await visit("https://example.net/");
+  check(r.url.startsWith(BLOCKED), "The site rule also blocks the bare domain", r.url.slice(0, 120));
+
+  // On the block page, the popup shows the blocked address and offers nothing
+  state = await popupFor(popup, BLOCKED);
+  check(state.host === "example.net" && state.badge === "Blocked" && state.disabled && state.site === "—" && state.page === "—",
+    "Popup on the block page shows the blocked site and disables both buttons", JSON.stringify(state));
+
+  const rules = await send(ext, { type: "GET_USER_RULES" });
+  check(!rules.allowlist.includes("example.net") && rules.customBlocks.includes("example.net"), "Popup only adds block rules");
+  await send(ext, { type: "REMOVE_CUSTOM_BLOCK", rule: "example.net" });
+  await send(ext, { type: "REMOVE_CUSTOM_BLOCK", rule: "www.example.net/?from=popup" });
 }
 
 // Options page: shows the user's lists and edits them through the same message API

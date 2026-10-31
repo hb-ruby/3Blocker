@@ -232,6 +232,26 @@
     return rule;
   }
 
+  /**
+   * The two rules the popup offers for a tab's URL, or null if the page can't be blocked
+   * (not http(s), or a host without a dot such as `localhost`).
+   *   site: the host with a leading `www.` stripped, so `www.reddit.com` -> `reddit.com`
+   *         (a host rule also covers every subdomain); other subdomains stay as they are.
+   *   page: the exact `host/path?query` (query kept, fragment dropped).
+   *
+   * @param {string} urlString
+   * @returns {{site: string, page: string}|null}
+   */
+  function popupRulesForUrl(urlString) {
+    const u = parseUrlParts(urlString);
+    if (!u || (u.protocol !== "http:" && u.protocol !== "https:") || !u.hostname.includes(".")) return null;
+    const host = u.hostname;
+    const stripped = host.startsWith("www.") ? host.slice(4) : host;
+    const site = normalizeRule(stripped.includes(".") ? stripped : host);
+    const page = normalizeRule(`${host}${u.pathname}${u.search}`);
+    return site && page ? { site, page } : null;
+  }
+
   const wildcardCache = new Map();
 
   // "reddit.com*type=media*" -> /^reddit\.com.*type=media.*$/
@@ -348,6 +368,7 @@
     validateBlocklistCandidate,
     getParentDomains,
     normalizeRule,
+    popupRulesForUrl,
     checkUrlPrecedence,
     calculateBackoffDelay
   };
