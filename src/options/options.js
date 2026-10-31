@@ -119,6 +119,54 @@ document.addEventListener("DOMContentLoaded", () => {
     el.dataset.state = state;
   }
 
+  // Block page message: saved straight to storage.local, previewed as you type
+  const message = {
+    form: document.getElementById("message-form"),
+    input: document.getElementById("message-input"),
+    reset: document.getElementById("message-reset"),
+    status: document.getElementById("message-status"),
+    preview: document.getElementById("message-preview")
+  };
+  const MESSAGE_KEY = BlocklistCore.BLOCK_MESSAGE_KEY;
+
+  function renderPreview() {
+    message.preview.replaceChildren(...BlocklistCore.parseBlockMessage(message.input.value).map((part) => {
+      if (!part.accent) return document.createTextNode(part.text);
+      const span = document.createElement("span");
+      span.className = "title-accent";
+      span.textContent = part.text;
+      return span;
+    }));
+  }
+
+  async function saveMessage(value) {
+    const text = value.replace(/\s+/g, " ").trim().slice(0, BlocklistCore.BLOCK_MESSAGE_MAX);
+    try {
+      if (text) await browser.storage.local.set({ [MESSAGE_KEY]: text });
+      else await browser.storage.local.remove(MESSAGE_KEY);
+      message.input.value = text;
+      message.status.textContent = text ? "Saved." : "Back to the default message.";
+    } catch (err) {
+      message.status.textContent = "Could not save the message.";
+    }
+    renderPreview();
+  }
+
+  message.input.addEventListener("input", () => {
+    message.status.textContent = "";
+    renderPreview();
+  });
+  message.form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    saveMessage(message.input.value);
+  });
+  message.reset.addEventListener("click", () => saveMessage(""));
+
+  browser.storage.local.get(MESSAGE_KEY).then((data) => {
+    message.input.value = data[MESSAGE_KEY] || "";
+    renderPreview();
+  }).catch(() => renderPreview());
+
   // Stay in sync when rules change elsewhere (popup buttons, block page "Allow this site")
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && (changes.user_allowlist || changes.user_custom_blocks)) {

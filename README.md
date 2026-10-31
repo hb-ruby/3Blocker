@@ -19,6 +19,8 @@ On top of that you have two lists of your own:
 
 Both lists can be viewed and edited on the options page (the list button in the popup).
 
+The block page can also display a custom message, set on the options page.
+
 ### How it works
 
 Every time you open a page, Firefox holds the request while 3Blocker checks the address. The first

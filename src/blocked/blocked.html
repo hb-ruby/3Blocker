@@ -8,7 +8,7 @@
 </head>
 <body>
   <main class="blocked-card">
-    <h1 class="blocked-title" id="blocked-title">Not <span class="title-accent">here.</span></h1>
+    <h1 class="blocked-title pending" id="blocked-title">Not <span class="title-accent">here.</span></h1>
     <!-- Spray-paint squiggle under the headline -->
     <svg class="scribble" viewBox="0 0 120 14" width="180" height="21" aria-hidden="true">
       <path d="M2 9 C8 1, 12 1, 14 8 S20 13, 24 5 S32 1, 34 8 S40 13, 45 5 S53 1, 55 8 S61 13, 66 5 S74 1, 76 8 S82 13, 87 5 S95 1, 97 8 S104 12, 118 4"/>
@@ -51,6 +51,7 @@
     </footer>
   </main>
 
+  <script src="../background/blocklist-core.js"></script>
   <script src="blocked.js"></script>
 </body>
 </html>

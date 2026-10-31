@@ -50,6 +50,7 @@ function runTests() {
   testAtomicSwap();
   testWildcardRules();
   testNormalizeRule();
+  testBlockMessage();
   testPopupRules();
   testMainBlocklistMatchForRule();
   testSourceRepoState();
@@ -352,6 +353,23 @@ function testSourceRepoState() {
   assertEqual(Core.sourceRepoState(403, { message: "API rate limit exceeded" }), "unknown", "Rate limited is unknown, not deleted");
   assertEqual(Core.sourceRepoState(0, null), "unknown", "Network failure is unknown");
   assertEqual(Core.sourceRepoState(200, {}), "unknown", "Unexpected answer is unknown");
+}
+
+function testBlockMessage() {
+  print("\n--- Block page message ---");
+  const show = (msg) => Core.parseBlockMessage(msg).map((p) => (p.accent ? `[${p.text}]` : p.text)).join("");
+  assertEqual(show(""), "Not [here.]", "Blank message shows the default 'Not here.'");
+  assertEqual(show("   "), "Not [here.]", "Whitespace-only message shows the default");
+  assertEqual(show(undefined), "Not [here.]", "Missing message shows the default");
+  assertEqual(show("Go *outside*"), "Go [outside]", "*word* is accented");
+  assertEqual(show("*Not* now, *maybe* never"), "[Not] now, [maybe] never", "Several accented words");
+  assertEqual(show("Read a *good book* instead"), "Read a [good book] instead", "Accent can span words");
+  assertEqual(show("5 * 3 = 15"), "5 * 3 = 15", "Lone asterisks stay literal");
+  assertEqual(show("a ** b"), "a ** b", "Empty pair stays literal");
+  assertEqual(show("*one* and *two"), "[one] and *two", "Unpaired trailing asterisk stays literal");
+  assertEqual(show("Take\n  a   *break*"), "Take a [break]", "Whitespace and line breaks collapse");
+  assertEqual(show("x".repeat(200)).length, Core.BLOCK_MESSAGE_MAX, "Message is capped at BLOCK_MESSAGE_MAX");
+  assertEqual(Core.BLOCK_MESSAGE_KEY, "block_message", "Stored under storage.local block_message");
 }
 
 // Execute tests

@@ -11,6 +11,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnGoBack = document.getElementById("btn-go-back");
   const btnAllowSite = document.getElementById("btn-allow-site");
 
+  // Headline: the user's own message from the options page, or the default "Not here."
+  const titleEl = document.getElementById("blocked-title");
+  browser.storage.local.get(BlocklistCore.BLOCK_MESSAGE_KEY)
+    .then((data) => renderTitle(data[BlocklistCore.BLOCK_MESSAGE_KEY]))
+    .catch(() => renderTitle(""));
+
+  function renderTitle(message) {
+    const parts = BlocklistCore.parseBlockMessage(message);
+    titleEl.replaceChildren(...parts.map((part) => {
+      if (!part.accent) return document.createTextNode(part.text);
+      const span = document.createElement("span");
+      span.className = "title-accent";
+      span.textContent = part.text;
+      return span;
+    }));
+    // Long messages get a smaller size of the same font so they still fit
+    const length = parts.reduce((n, part) => n + part.text.length, 0);
+    titleEl.classList.toggle("long", length > 24);
+    titleEl.classList.remove("pending");
+  }
+
   if (targetUrl) {
     targetUrlEl.textContent = targetUrl;
     targetUrlEl.title = targetUrl;
@@ -46,7 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
     showNote("Sites on the main blocklist can't be allowed.");
   }
 
-    btnGoBack.addEventListener("click", () => {
+  btnGoBack.addEventListener("click", () => {
     if (window.history.length > 1) {
       window.history.back();
     } else {

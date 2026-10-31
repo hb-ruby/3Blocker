@@ -66,6 +66,28 @@
         <li><code>example.com/videos*</code> — <code>*</code> matches anything</li>
       </ul>
     </section>
+
+    <details class="rule-card message-card" id="message-card">
+      <summary class="message-summary">
+        <h2 class="card-title">Block page message</h2>
+        <svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </summary>
+      <div class="message-body">
+        <p class="card-note">Replace the "Not here." headline on the block page. Wrap words in asterisks to paint them yellow: <code>*here*</code>.</p>
+        <form class="add-form" id="message-form" autocomplete="off">
+          <input class="rule-input message-input" id="message-input" type="text" maxlength="80" placeholder="Not *here.*" aria-label="Block page message">
+          <button class="btn btn-primary" type="submit">Save</button>
+          <button class="btn btn-secondary" id="message-reset" type="button">Reset</button>
+        </form>
+        <p class="message-status" id="message-status" role="status"></p>
+        <div class="message-preview" aria-label="Preview">
+          <span class="preview-label">Preview</span>
+          <p class="preview-title" id="message-preview"></p>
+        </div>
+      </div>
+    </details>
   </main>
 
   <script src="../background/blocklist-core.js"></script>

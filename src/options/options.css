@@ -313,6 +313,96 @@ body {
   color: var(--chalk);
 }
 
+/* Block page message (collapsible) */
+.message-card {
+  display: block;
+}
+
+.message-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+}
+
+.message-summary::-webkit-details-marker {
+  display: none;
+}
+
+.message-summary:focus-visible {
+  outline: 2px solid var(--chalk);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.chevron {
+  color: var(--chalk-dim);
+  transition: transform 0.3s var(--ease);
+}
+
+.message-card[open] .chevron {
+  transform: rotate(180deg);
+}
+
+.message-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.message-input {
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+
+.message-body code {
+  font-family: var(--font-mono);
+  color: var(--chalk);
+}
+
+.message-status {
+  font-size: 12.5px;
+  color: var(--chalk-dim);
+}
+
+.message-status:empty {
+  display: none;
+}
+
+.message-preview {
+  background: var(--concrete);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--chalk-faint);
+}
+
+/* Same font and casing as the block page headline */
+.preview-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.5px;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.title-accent {
+  color: var(--yellow);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     transition: none !important;

@@ -377,6 +377,35 @@
     return body.archived ? "archived" : "active";
   }
 
+  // Block page headline: the user's own message (storage.local BLOCK_MESSAGE_KEY) or the default.
+  // Text wrapped in asterisks, e.g. "*here*", is shown in the accent (yellow) colour.
+  const BLOCK_MESSAGE_KEY = "block_message";
+  const BLOCK_MESSAGE_MAX = 80;
+  const DEFAULT_BLOCK_MESSAGE = "Not *here.*";
+
+  /**
+   * Split a block-page message into plain and accented parts. A blank message falls back to the
+   * default; an unpaired "*" stays as a literal character; whitespace runs collapse to one space.
+   *
+   * @param {string} message
+   * @returns {{ text: string, accent: boolean }[]}
+   */
+  function parseBlockMessage(message) {
+    let text = typeof message === "string" ? message.replace(/\s+/g, " ").trim().slice(0, BLOCK_MESSAGE_MAX) : "";
+    if (!text) text = DEFAULT_BLOCK_MESSAGE;
+    const parts = [];
+    const re = /\*([^*]*[^*\s][^*]*)\*/g;
+    let last = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) parts.push({ text: text.slice(last, m.index), accent: false });
+      parts.push({ text: m[1], accent: true });
+      last = re.lastIndex;
+    }
+    if (last < text.length) parts.push({ text: text.slice(last), accent: false });
+    return parts;
+  }
+
   // Export module for both browser and Node/CJS environments
   const CoreModule = {
     SOURCE_REPO,
@@ -389,7 +418,11 @@
     popupRulesForUrl,
     checkUrlPrecedence,
     mainBlocklistMatchForRule,
-    sourceRepoState
+    sourceRepoState,
+    BLOCK_MESSAGE_KEY,
+    BLOCK_MESSAGE_MAX,
+    DEFAULT_BLOCK_MESSAGE,
+    parseBlockMessage
   };
 
   if (typeof module !== "undefined" && module.exports) {

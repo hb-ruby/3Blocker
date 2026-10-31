@@ -50,12 +50,24 @@ body {
 }
 
 .blocked-title {
+  overflow-wrap: anywhere;
   font-family: var(--font-display);
   font-size: clamp(48px, 14vw, 72px);
   font-weight: 900;
   line-height: 0.95;
   letter-spacing: -1.5px;
   text-transform: uppercase;
+}
+
+.blocked-title.long {
+  font-size: clamp(30px, 8vw, 44px);
+  line-height: 1.05;
+  letter-spacing: -0.5px;
+}
+
+/* Hidden until the user's message is read, so the default doesn't flash first */
+.blocked-title.pending {
+  visibility: hidden;
 }
 
 .title-accent {

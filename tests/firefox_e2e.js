@@ -171,6 +171,12 @@ async function testBlocking() {
     match: document.getElementById("match-rule").textContent
   }));
   check(details.reason.length > 0 && details.match.endsWith("xvideos.com"), "Block page shows reason and matched rule", JSON.stringify(details));
+  const defaultTitle = await r.page.evaluate(() => ({
+    text: document.getElementById("blocked-title").textContent,
+    accent: [...document.querySelectorAll("#blocked-title .title-accent")].map((e) => e.textContent)
+  }));
+  check(defaultTitle.text === "Not here." && defaultTitle.accent.join() === "here.",
+    "Block page shows the default 'Not here.' headline", JSON.stringify(defaultTitle));
   await screenshot(r.page, "blocked.png");
   const mainActions = await r.page.evaluate(() => ({
     allowShown: !document.getElementById("btn-allow-site").hidden,
@@ -373,7 +379,62 @@ async function testOptionsPage(ext) {
   }));
   check(!card.refreshButton && /bundled/.test(card.note) && /isn't downloaded/.test(card.note),
     "Options page has no 'Refresh now' and says the list is bundled", JSON.stringify(card));
+  await testBlockMessage(opts);
   await opts.close();
+}
+
+// Options page "Block page message" dropdown -> custom headline on the block page
+async function testBlockMessage(opts) {
+  const titleOf = async () => {
+    const r = await visit("http://pornhub.com/");
+    const t = await r.page.evaluate(() => {
+      const el = document.getElementById("blocked-title");
+      const accent = el.querySelector(".title-accent");
+      return {
+        text: el.textContent,
+        accent: [...el.querySelectorAll(".title-accent")].map((e) => e.textContent),
+        font: getComputedStyle(el).fontFamily,
+        plainColor: getComputedStyle(el).color,
+        accentColor: accent ? getComputedStyle(accent).color : ""
+      };
+    });
+    return { r, t };
+  };
+  const before = await titleOf();
+  await before.r.page.close().catch(() => {});
+
+  const closed = await opts.evaluate(() => !document.getElementById("message-card").open);
+  check(closed, "Block page message section is collapsed by default");
+  await opts.click("#message-card summary");
+  const opened = await opts.evaluate(() => document.getElementById("message-card").open);
+  check(opened, "Clicking the section header reveals the message option");
+
+  await opts.type("#message-input", "Go *outside*, touch *grass*");
+  const preview = await opts.evaluate(() => ({
+    text: document.getElementById("message-preview").textContent,
+    accent: [...document.querySelectorAll("#message-preview .title-accent")].map((e) => e.textContent)
+  }));
+  check(preview.text === "Go outside, touch grass" && preview.accent.join() === "outside,grass",
+    "Options page previews the message with *words* accented", JSON.stringify(preview));
+  await opts.click("#message-form button[type=submit]");
+  await opts.waitForFunction(() => document.getElementById("message-status").textContent === "Saved.", { timeout: 5000 }).catch(() => {});
+  const stored = await opts.evaluate(() => browser.storage.local.get("block_message"));
+  check(stored.block_message === "Go *outside*, touch *grass*", "Options page saves the message", JSON.stringify(stored));
+  await screenshot(opts, "options-message.png");
+
+  const custom = await titleOf();
+  check(custom.t.text === "Go outside, touch grass" && custom.t.accent.join() === "outside,grass",
+    "Block page shows the custom message with *words* accented", JSON.stringify(custom.t));
+  check(custom.t.font === before.t.font && custom.t.accentColor === before.t.accentColor && custom.t.accentColor !== custom.t.plainColor,
+    "Custom message keeps the headline font and the yellow accent", `${custom.t.font} / ${custom.t.accentColor}`);
+  await screenshot(custom.r.page, "blocked-custom-message.png");
+  await custom.r.page.close().catch(() => {});
+
+  await opts.click("#message-reset");
+  await opts.waitForFunction(() => document.getElementById("message-input").value === "", { timeout: 5000 }).catch(() => {});
+  const reset = await titleOf();
+  check(reset.t.text === "Not here." && reset.t.accent.join() === "here.", "Reset brings back the default headline", JSON.stringify(reset.t));
+  await reset.r.page.close().catch(() => {});
 }
 
 // Firefox unloads idle MV3 event pages (normally after 30 s). Blocking must still work when a
