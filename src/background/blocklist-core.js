@@ -1,16 +1,14 @@
 /**
  * 3Blocker Core Blocklist Engine
- * Handles parsing, validation, parent domain resolution, precedence rules, and backoff.
+ * Handles parsing, validation, parent domain resolution and precedence rules.
  */
 (function (global) {
   "use strict";
 
-  const LIVE_BLOCKLIST_URL = "https://blocklistproject.github.io/Lists/alt-version/porn-nl.txt";
-  // GitHub repo behind LIVE_BLOCKLIST_URL; the options page shows whether it is active, archived or gone
+  // GitHub repo the bundled lists/blocklist.txt came from (alt-version/porn-nl.txt); the options
+  // page shows whether it is active, archived or gone. The list itself is never downloaded.
   const SOURCE_REPO = "blocklistproject/Lists";
   const SOURCE_REPO_API = `https://api.github.com/repos/${SOURCE_REPO}`;
-  const BASE_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes
-  const MAX_BACKOFF_MS = 24 * 60 * 60 * 1000; // 24 hours
 
   // Hostname regex allowing standard domain labels: letters, digits, hyphens, underscores (used in subdomains)
   // Each label 1-63 chars, labels separated by dots, at least two labels (domain + TLD)
@@ -379,27 +377,10 @@
     return body.archived ? "archived" : "active";
   }
 
-  /**
-   * Exponential backoff calculation for retry attempts.
-   *
-   * @param {number} retryCount - current number of consecutive retries
-   * @param {number} [baseDelayMs=300000] - 5 minutes
-   * @param {number} [maxDelayMs=86400000] - 24 hours
-   * @returns {number} delay in milliseconds
-   */
-  function calculateBackoffDelay(retryCount, baseDelayMs = BASE_BACKOFF_MS, maxDelayMs = MAX_BACKOFF_MS) {
-    const exponent = Math.max(0, retryCount);
-    const delay = baseDelayMs * Math.pow(2, exponent);
-    return Math.min(delay, maxDelayMs);
-  }
-
   // Export module for both browser and Node/CJS environments
   const CoreModule = {
-    LIVE_BLOCKLIST_URL,
     SOURCE_REPO,
     SOURCE_REPO_API,
-    BASE_BACKOFF_MS,
-    MAX_BACKOFF_MS,
     isValidHostname,
     parseBlocklist,
     validateBlocklistCandidate,
@@ -408,7 +389,6 @@
     popupRulesForUrl,
     checkUrlPrecedence,
     mainBlocklistMatchForRule,
-    calculateBackoffDelay,
     sourceRepoState
   };
 

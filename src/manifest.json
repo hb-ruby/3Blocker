@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "3Blocker",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Blocks adult websites and allows adding custom websites to a blocklist.",
   "browser_specific_settings": {
     "gecko": {
@@ -21,7 +21,6 @@
     "webRequest",
     "webRequestBlocking",
     "webNavigation",
-    "alarms",
     "tabs",
     "activeTab"
   ],

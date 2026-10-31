@@ -1,7 +1,7 @@
 /**
  * 3Blocker Automated Test Suite
  * Tests parser, validation before swap, parent domain resolution,
- * multi-tier precedence, exponential backoff, and atomic storage.
+ * multi-tier precedence, and atomic storage.
  */
 
 // Load BlocklistCore module
@@ -46,7 +46,7 @@ function runTests() {
   testValidationBeforeSwap();
   testParentDomainTraversal();
   testPrecedenceRules();
-  testExponentialBackoff();
+  testNoLiveRefresh();
   testAtomicSwap();
   testWildcardRules();
   testNormalizeRule();
@@ -246,23 +246,10 @@ function testPrecedenceRules() {
   assertEqual(r8.reason, "allowed", "Reason is allowed");
 }
 
-function testExponentialBackoff() {
-  print("\n--- 6. Exponential Backoff Tests ---");
-
-  const b0 = Core.calculateBackoffDelay(0);
-  assertEqual(b0, 5 * 60 * 1000, "Retry 0 is 5 minutes");
-
-  const b1 = Core.calculateBackoffDelay(1);
-  assertEqual(b1, 10 * 60 * 1000, "Retry 1 is 10 minutes");
-
-  const b2 = Core.calculateBackoffDelay(2);
-  assertEqual(b2, 20 * 60 * 1000, "Retry 2 is 20 minutes");
-
-  const b3 = Core.calculateBackoffDelay(3);
-  assertEqual(b3, 40 * 60 * 1000, "Retry 3 is 40 minutes");
-
-  const bMax = Core.calculateBackoffDelay(15);
-  assertEqual(bMax, 24 * 60 * 60 * 1000, "Retry 15 is capped at 24 hours max");
+function testNoLiveRefresh() {
+  print("\n--- 6. No live refresh (bundled list only) ---");
+  assert(!("LIVE_BLOCKLIST_URL" in Core), "No live blocklist URL is exported");
+  assert(!("calculateBackoffDelay" in Core), "No retry backoff is exported");
 }
 
 function testAtomicSwap() {

@@ -42,9 +42,9 @@ Rules on your own lists match like this:
 | `example.com/videos*` | Anything that fits the pattern, on any subdomain; `*` matches any text |
 
 The main blocklist only contains domains, so it always blocks whole sites (and their subdomains).
-It's refreshed from the Block List Project once a day; the options page shows its size and when it
-was last checked, and has a **Refresh now** button. A copy is bundled with the extension, so
-blocking works offline and before the first download.
+It comes from the Block List Project and is bundled with the extension; it isn't downloaded or
+updated online. The project's repo is archived, so the list no longer changes. The options page
+shows its size.
 
 - Only full page loads over `http`/`https` are checked, not images or scripts inside a page.
 - Sites that change their address without reloading the page (common on modern web apps)

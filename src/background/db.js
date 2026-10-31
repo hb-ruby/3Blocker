@@ -57,15 +57,10 @@
       req.onsuccess = () => {
         resolve(req.result || {
           id: META_KEY,
-          etag: null,
-          lastModified: null,
           domainCount: 0,
-          fetchedAt: null,
+          savedAt: null,
           activeVersion: null,
-          status: "idle",
-          lastError: null,
-          retryCount: 0,
-          nextRetryAt: null
+          bundledVersion: null
         });
       };
       req.onerror = () => reject(req.error);
@@ -97,7 +92,7 @@
    * 4. Cleans up old version chunks.
    *
    * @param {string[]} domains - Flat array of valid deduplicated domain strings.
-   * @param {object} metaInfo - { etag, lastModified, fetchedAt }
+   * @param {object} metaInfo - { bundledVersion }: the extension version whose bundled list this is
    */
   async function saveBlocklistAtomic(domains, metaInfo = {}) {
     if (!Array.isArray(domains)) {
@@ -136,13 +131,8 @@
       id: META_KEY,
       activeVersion: newVersion,
       domainCount: domains.length,
-      etag: metaInfo.etag !== undefined ? metaInfo.etag : currentMeta.etag,
-      lastModified: metaInfo.lastModified !== undefined ? metaInfo.lastModified : currentMeta.lastModified,
-      fetchedAt: metaInfo.fetchedAt || new Date().toISOString(),
-      status: "idle",
-      lastError: null,
-      retryCount: 0,
-      nextRetryAt: null
+      savedAt: new Date().toISOString(),
+      bundledVersion: metaInfo.bundledVersion || null
     };
 
     await new Promise((resolve, reject) => {
@@ -226,15 +216,10 @@
   function createMockDatabase() {
     let mockMeta = {
       id: META_KEY,
-      etag: null,
-      lastModified: null,
       domainCount: 0,
-      fetchedAt: null,
+      savedAt: null,
       activeVersion: null,
-      status: "idle",
-      lastError: null,
-      retryCount: 0,
-      nextRetryAt: null
+      bundledVersion: null
     };
     const mockChunks = new Map();
 

@@ -1,7 +1,8 @@
 /**
  * 3Blocker Background Script
  * Intercepts top-level page requests via blocking webRequest.onBeforeRequest,
- * enforces multi-tier precedence, and manages live blocklist updates with conditional requests.
+ * and enforces multi-tier precedence. The main blocklist is the copy bundled in lists/blocklist.txt;
+ * it is never downloaded (the source repo was archived in 2026-10, so the list no longer changes).
  *
  * Firefox runs MV3 backgrounds as event pages that are unloaded when idle. Every event listener
  * is therefore registered synchronously at the top level (so Firefox can wake us for it), and
@@ -13,9 +14,6 @@ let activeBlocklistSet = new Set();
 let userAllowlist = new Set();
 let userCustomBlocks = new Set();
 let blocklistMeta = null;
-let isUpdating = false;
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Initialize on background startup (and on every wake-up after Firefox unloads the event page)
 const backgroundReady = initBackground().catch((err) => {
@@ -42,41 +40,34 @@ async function initBackground() {
     });
   }
 
-  // 2. Open DB and load active blocklist
+  // 2. Load the main blocklist from the IndexedDB cache, unless it is missing or wasn't made from
+  //    this version's bundled file (e.g. an older version's online download): then re-read
+  //    the bundled file. Parsing 18 MB on every wake would be slow, hence the cache.
   try {
     const loaded = await BlocklistDB.loadActiveBlocklist();
     blocklistMeta = loaded.meta;
 
-    if (loaded.domains && loaded.domains.size > 0) {
+    if (loaded.domains && loaded.domains.size > 0 && blocklistMeta.bundledVersion === extensionVersion()) {
       activeBlocklistSet = loaded.domains;
       console.log(`Loaded ${activeBlocklistSet.size} domains from IndexedDB cache.`);
     } else {
-      console.log("IndexedDB cache is empty. Loading bundled fallback blocklist.txt...");
+      console.log("Loading bundled blocklist.txt into IndexedDB...");
       await loadBundledBlocklist();
     }
   } catch (dbErr) {
-    console.warn("Could not load from IndexedDB, loading bundled fallback:", dbErr);
+    console.warn("Could not load from IndexedDB, loading bundled list:", dbErr);
     await loadBundledBlocklist();
-  }
-
-  // 3. Setup periodic refresh alarm (every 24 hours)
-  setupAlarms();
-
-  // 4. Check the live list if it has never been fetched or is over a day old. Not on every
-  //    start: the event page wakes up often, and the daily alarm covers regular refreshes.
-  const neverFetchedLive = !blocklistMeta || (!blocklistMeta.etag && !blocklistMeta.lastModified);
-  const fetchedAt = blocklistMeta && blocklistMeta.fetchedAt ? Date.parse(blocklistMeta.fetchedAt) : 0;
-  if (neverFetchedLive || Date.now() - fetchedAt > DAY_MS) {
-    setTimeout(() => {
-      fetchLiveBlocklist(false).catch((e) => {
-        console.warn("Initial live blocklist check skipped/failed:", e);
-      });
-    }, 3000);
   }
 }
 
+function extensionVersion() {
+  return (typeof browser !== "undefined" && browser.runtime && browser.runtime.getManifest)
+    ? browser.runtime.getManifest().version
+    : "dev";
+}
+
 /**
- * Load bundled fallback list from extension package (lists/blocklist.txt).
+ * Load the bundled main blocklist (lists/blocklist.txt) and cache it in IndexedDB.
  */
 async function loadBundledBlocklist() {
   try {
@@ -97,15 +88,13 @@ async function loadBundledBlocklist() {
       throw new Error(`Bundled blocklist failed validation: ${validation.error}`);
     }
 
-    // Atomically persist bundled list to IndexedDB as initial active version
+    // Atomically persist the bundled list to IndexedDB, tagged with this extension version
     blocklistMeta = await BlocklistDB.saveBlocklistAtomic(parsed.domains, {
-      fetchedAt: new Date().toISOString(),
-      etag: null,
-      lastModified: null
+      bundledVersion: extensionVersion()
     });
 
     activeBlocklistSet = new Set(parsed.domains);
-    console.log(`Successfully bundled & loaded fallback list with ${activeBlocklistSet.size} domains.`);
+    console.log(`Loaded bundled blocklist with ${activeBlocklistSet.size} domains.`);
   } catch (err) {
     console.error("Critical: Could not load bundled blocklist:", err);
   }
@@ -118,153 +107,6 @@ async function loadUserRules() {
   const rules = await BlocklistDB.getUserRules();
   userAllowlist = rules.allowlist;
   userCustomBlocks = rules.customBlocks;
-}
-
-/**
- * Configure Alarms for periodic refreshes.
- */
-async function setupAlarms() {
-  if (typeof browser === "undefined" || !browser.alarms) return;
-
-  // Periodic daily alarm (every 1440 minutes = 24 hours). Only create it if missing, so
-  // waking the event page doesn't keep pushing the next refresh another day out.
-  if (!(await browser.alarms.get("refreshBlocklistDaily"))) {
-    browser.alarms.create("refreshBlocklistDaily", {
-      periodInMinutes: 1440
-    });
-  }
-}
-
-if (typeof browser !== "undefined" && browser.alarms) {
-  browser.alarms.onAlarm.addListener(async (alarm) => {
-    if (alarm.name === "refreshBlocklistDaily" || alarm.name === "retryBlocklistAlarm") {
-      await backgroundReady;
-      fetchLiveBlocklist(false).catch((err) => {
-        console.warn("Alarm triggered blocklist refresh failed:", err);
-      });
-    }
-  });
-}
-
-/**
- * Fetch the live blocklist using conditional HTTP headers (ETag / Last-Modified).
- * Validates before swapping to prevent overwriting with corrupted or shrunken lists.
- * Implements exponential backoff on failure.
- *
- * @param {boolean} isManual - whether triggered manually by the user
- * @returns {Promise<{ success: boolean, count?: number, notModified?: boolean, error?: string }>}
- */
-async function fetchLiveBlocklist(isManual = false) {
-  if (isUpdating) {
-    return { success: false, error: "Update already in progress" };
-  }
-
-  isUpdating = true;
-  await BlocklistDB.setMetadata({ status: "updating" });
-
-  try {
-    const meta = await BlocklistDB.getMetadata();
-    const headers = {};
-
-    // Conditional HTTP headers
-    if (meta.etag) {
-      headers["If-None-Match"] = meta.etag;
-    }
-    if (meta.lastModified) {
-      headers["If-Modified-Since"] = meta.lastModified;
-    }
-
-    const response = await fetch(BlocklistCore.LIVE_BLOCKLIST_URL, {
-      method: "GET",
-      headers: headers
-    });
-
-    // 1. Handle HTTP 304 Not Modified
-    if (response.status === 304) {
-      console.log("Live blocklist is unchanged (HTTP 304 Not Modified).");
-      const updatedMeta = await BlocklistDB.setMetadata({
-        fetchedAt: new Date().toISOString(),
-        status: "idle",
-        lastError: null,
-        retryCount: 0,
-        nextRetryAt: null
-      });
-      blocklistMeta = updatedMeta;
-      clearRetryAlarm();
-      return { success: true, notModified: true, count: activeBlocklistSet.size };
-    }
-
-    // 2. Handle HTTP Errors (4xx, 5xx)
-    if (!response.ok) {
-      throw new Error(`Server returned HTTP ${response.status} ${response.statusText}`);
-    }
-
-    // 3. Handle HTTP 200 OK
-    const newEtag = response.headers.get("ETag") || response.headers.get("etag");
-    const newLastModified = response.headers.get("Last-Modified") || response.headers.get("last-modified");
-    const rawText = await response.text();
-
-    // Parse candidate
-    const parsed = BlocklistCore.parseBlocklist(rawText);
-
-    // Validation before swap
-    const validation = BlocklistCore.validateBlocklistCandidate(parsed, activeBlocklistSet.size);
-    if (!validation.valid) {
-      throw new Error(`Validation rejected candidate download: ${validation.error}`);
-    }
-
-    // Atomic swap in IndexedDB
-    const newMeta = await BlocklistDB.saveBlocklistAtomic(parsed.domains, {
-      etag: newEtag,
-      lastModified: newLastModified,
-      fetchedAt: new Date().toISOString()
-    });
-
-    // Atomic swap in memory
-    activeBlocklistSet = new Set(parsed.domains);
-    blocklistMeta = newMeta;
-    clearRetryAlarm();
-
-    console.log(`Live blocklist atomically updated: ${activeBlocklistSet.size} domains.`);
-    return { success: true, count: activeBlocklistSet.size };
-
-  } catch (err) {
-    console.error("Live blocklist update failed:", err.message);
-    const meta = await BlocklistDB.getMetadata();
-    const currentRetries = (meta.retryCount || 0) + 1;
-    const backoffDelay = BlocklistCore.calculateBackoffDelay(currentRetries);
-    const nextRetry = Date.now() + backoffDelay;
-
-    const errorMeta = await BlocklistDB.setMetadata({
-      status: "error",
-      lastError: err.message,
-      retryCount: currentRetries,
-      nextRetryAt: nextRetry
-    });
-    blocklistMeta = errorMeta;
-
-    // Schedule retry alarm if alarms API is available
-    scheduleRetryAlarm(backoffDelay);
-
-    return { success: false, error: err.message };
-  } finally {
-    isUpdating = false;
-  }
-}
-
-function scheduleRetryAlarm(delayMs) {
-  if (typeof browser !== "undefined" && browser.alarms) {
-    browser.alarms.create("retryBlocklistAlarm", {
-      when: Date.now() + delayMs
-    });
-    console.log(`Scheduled retry in ${Math.round(delayMs / 60000)} minutes.`);
-  }
-}
-
-function clearRetryAlarm() {
-  if (typeof browser !== "undefined" && browser.alarms) {
-    browser.alarms.clear("retryBlocklistAlarm");
-  }
 }
 
 /**
@@ -351,23 +193,11 @@ async function handleMessage(message) {
       const meta = await BlocklistDB.getMetadata();
       return {
         success: true,
-        isUpdating,
         domainCount: activeBlocklistSet.size || (meta ? meta.domainCount : 0),
-        etag: meta ? meta.etag : null,
-        lastModified: meta ? meta.lastModified : null,
-        fetchedAt: meta ? meta.fetchedAt : null,
-        status: isUpdating ? "updating" : (meta ? meta.status : "idle"),
-        lastError: meta ? meta.lastError : null,
-        retryCount: meta ? meta.retryCount : 0,
-        nextRetryAt: meta ? meta.nextRetryAt : null,
+        bundledVersion: meta ? meta.bundledVersion || null : null,
         allowlistCount: userAllowlist.size,
         customBlocksCount: userCustomBlocks.size
       };
-    }
-
-    case "REFRESH_BLOCKLIST_NOW": {
-      const result = await fetchLiveBlocklist(true);
-      return result;
     }
 
     case "CHECK_URL": {

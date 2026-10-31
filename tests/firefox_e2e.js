@@ -42,12 +42,21 @@ function firefoxPath() {
   return "firefox";
 }
 
+// Each launch gets a fresh profile (~70 MB); remove them all when the run ends, even after a crash,
+// or they fill up /tmp (a small tmpfs on the dev machine).
+const profileDirs = [];
+process.on("exit", () => {
+  for (const dir of profileDirs) fs.rmSync(dir, { recursive: true, force: true });
+});
+
 async function launch(extraPrefs = {}) {
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "3blocker-ff-"));
+  profileDirs.push(userDataDir);
   browser = await puppeteer.launch({
     browser: "firefox",
     executablePath: firefoxPath(),
     headless: true,
-    userDataDir: fs.mkdtempSync(path.join(os.tmpdir(), "3blocker-ff-")),
+    userDataDir,
     // Lets WebDriver run scripts in extension pages (to call the message API)
     env: { ...process.env, MOZ_REMOTE_ALLOW_SYSTEM_ACCESS: "1" },
     extraPrefsFirefox: {
@@ -131,6 +140,16 @@ async function testBlocking() {
   const ext = await openExt("popup/popup.html", { width: 360, height: 640 });
   const status = await waitForBlocklist(ext);
   check(status.domainCount > 900000, "Background loaded blocklist", `${status.domainCount} domains${status.err ? ", " + status.err : ""}`);
+
+  // The main list is only ever the bundled copy: no online refresh, alarms or refresh message
+  const manifestVersion = await ext.evaluate(() => browser.runtime.getManifest().version);
+  check(status.bundledVersion === manifestVersion, "Main blocklist comes from the bundled file", `${status.bundledVersion} vs ${manifestVersion}`);
+  const noRefresh = await ext.evaluate(async () => ({
+    alarmsApi: typeof browser.alarms,
+    refreshMsg: await browser.runtime.sendMessage({ type: "REFRESH_BLOCKLIST_NOW" })
+  }));
+  check(noRefresh.alarmsApi === "undefined" && noRefresh.refreshMsg && !noRefresh.refreshMsg.success,
+    "No refresh alarms or 'refresh now' message", JSON.stringify(noRefresh));
 
   await screenshot(ext, "popup.png");
   const syncCard = await ext.evaluate(() => !!document.getElementById("btn-refresh-blocklist"));
@@ -337,7 +356,7 @@ async function testOptionsPage(ext) {
   check(!(await listed("allowlist-list")).includes("allowed.example.org"), "Options page removes an allowlist rule");
   await send(ext, { type: "REMOVE_ALLOWLIST", rule: "from-popup.example.org" });
 
-  // Main blocklist card: size, last update, and "Refresh now" (moved here from the popup)
+  // Main blocklist card: size and source repo status (the bundled list is never refreshed)
   const count = await opts.evaluate(() => document.getElementById("mainlist-count").textContent);
   check(/^[\d,.\s]+ domains$/.test(count), "Options page shows the main blocklist size", count);
   await opts.waitForFunction(() => document.getElementById("source-state").dataset.state, { timeout: 15000 }).catch(() => {});
@@ -348,16 +367,12 @@ async function testOptionsPage(ext) {
   // The real answer changes with upstream, so only check that it resolved to a known state
   check(["active", "archived", "deleted", "unknown"].includes(source.state) && source.text !== "Checking…",
     "Options page shows the source repo status", JSON.stringify(source));
-  await opts.click("#mainlist-refresh");
-  await opts.waitForFunction(() => document.getElementById("mainlist-refresh").disabled, { timeout: 2000 }).catch(() => {});
-  await opts.waitForFunction(() => !document.getElementById("mainlist-refresh").disabled, { timeout: 90000 }).catch(() => {});
-  const sync = await opts.evaluate(() => ({
-    status: document.getElementById("mainlist-status").textContent,
-    time: document.getElementById("mainlist-time").textContent,
-    error: document.getElementById("mainlist-error").textContent
+  const card = await opts.evaluate(() => ({
+    refreshButton: !!document.getElementById("mainlist-refresh"),
+    note: document.getElementById("mainlist-note").textContent
   }));
-  check(sync.status === "Up to date" && sync.time.startsWith("Last checked") && !sync.error,
-    "Options page 'Refresh now' updates the main blocklist", JSON.stringify(sync));
+  check(!card.refreshButton && /bundled/.test(card.note) && /isn't downloaded/.test(card.note),
+    "Options page has no 'Refresh now' and says the list is bundled", JSON.stringify(card));
   await opts.close();
 }
 
