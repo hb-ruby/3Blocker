@@ -45,6 +45,22 @@
       <p class="empty-note" id="allowlist-empty">No allowed sites yet.</p>
     </section>
 
+    <section class="rule-card" id="mainlist-card">
+      <div class="card-header">
+        <h2 class="card-title">Main blocklist</h2>
+        <span class="count-badge" id="mainlist-count">…</span>
+      </div>
+      <p class="card-note">Adult-site list from the Block List Project, updated automatically once a day.</p>
+      <div class="sync-row">
+        <div class="sync-meta">
+          <span class="sync-status" id="mainlist-status">Checking…</span>
+          <span class="sync-time" id="mainlist-time"></span>
+        </div>
+        <button class="btn btn-secondary" id="mainlist-refresh" type="button">Refresh now</button>
+      </div>
+      <p class="form-error" id="mainlist-error" role="alert"></p>
+    </section>
+
     <section class="help-box">
       <h2 class="help-title">Rule format</h2>
       <ul>

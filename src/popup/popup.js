@@ -15,13 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnBlockText = document.getElementById("btn-block-text");
   const btnOpenList = document.getElementById("btn-open-list");
 
-  // Sync Card Elements
-  const blocklistCountBadge = document.getElementById("blocklist-count-badge");
-  const blocklistSyncStatus = document.getElementById("blocklist-sync-status");
-  const blocklistSyncTime = document.getElementById("blocklist-sync-time");
-  const btnRefreshBlocklist = document.getElementById("btn-refresh-blocklist");
-  const refreshIcon = document.getElementById("refresh-icon");
-  const refreshBtnText = document.getElementById("refresh-btn-text");
+  // Footer Elements
   const statCountEl = document.getElementById("stat-count");
 
   // State
@@ -41,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initCurrentTab();
   initSlider();
   initOptionsButton();
-  initSyncCard();
+  updateStatCount();
   updateSliderTrackBackground();
 
   function initOptionsButton() {
@@ -57,92 +51,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /**
-   * Blocklist Sync Status & "Refresh now" button logic
-   */
-  async function initSyncCard() {
-    await updateSyncDisplay();
-
-    if (btnRefreshBlocklist) {
-      btnRefreshBlocklist.addEventListener("click", async () => {
-        setSyncRefreshingState(true);
-        try {
-          const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
-          if (browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
-            const res = await browserApi.runtime.sendMessage({ type: "REFRESH_BLOCKLIST_NOW" });
-            if (res && !res.success) {
-              blocklistSyncStatus.textContent = res.error ? "Failed" : "Error";
-              blocklistSyncStatus.className = "sync-status error";
-            }
-          }
-        } catch (e) {
-          console.warn("Refresh request failed:", e);
-        } finally {
-          await updateSyncDisplay();
-          setSyncRefreshingState(false);
-        }
-      });
-    }
-  }
-
-  function setSyncRefreshingState(isRefreshing) {
-    if (!btnRefreshBlocklist) return;
-    btnRefreshBlocklist.disabled = isRefreshing;
-    if (isRefreshing) {
-      refreshIcon.classList.add("spinning");
-      refreshBtnText.textContent = "Updating...";
-      blocklistSyncStatus.textContent = "Updating...";
-      blocklistSyncStatus.className = "sync-status updating";
-    } else {
-      refreshIcon.classList.remove("spinning");
-      refreshBtnText.textContent = "Refresh now";
-    }
-  }
-
-  async function updateSyncDisplay() {
+  // Footer "Sites Blocked" stat: number of the user's custom block rules
+  async function updateStatCount() {
     try {
       const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
       if (browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
         const status = await browserApi.runtime.sendMessage({ type: "GET_STATUS" });
-        if (status && status.success) {
-          const count = status.domainCount || 0;
-          blocklistCountBadge.textContent = count > 0 ? `${count.toLocaleString()} domains` : "Empty";
-
-          if (statCountEl) {
-            statCountEl.textContent = (status.customBlocksCount || 0).toString();
-          }
-
-          if (status.status === "updating") {
-            blocklistSyncStatus.textContent = "Updating...";
-            blocklistSyncStatus.className = "sync-status updating";
-          } else if (status.status === "error") {
-            blocklistSyncStatus.textContent = "Update failed";
-            blocklistSyncStatus.className = "sync-status error";
-            if (status.lastError) {
-              blocklistSyncStatus.title = status.lastError;
-            }
-          } else {
-            blocklistSyncStatus.textContent = "Up to date";
-            blocklistSyncStatus.className = "sync-status";
-          }
-
-          if (status.fetchedAt) {
-            const date = new Date(status.fetchedAt);
-            blocklistSyncTime.textContent = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-          } else {
-            blocklistSyncTime.textContent = "Bundled fallback";
-          }
-          return;
+        if (status && status.success && statCountEl) {
+          statCountEl.textContent = (status.customBlocksCount || 0).toString();
         }
       }
     } catch (e) {
-      console.log("Could not query background status, using default preview values.");
+      console.log("Could not query background status.");
     }
-
-    // Default preview fallback
-    blocklistCountBadge.textContent = "953,393 domains";
-    blocklistSyncStatus.textContent = "Up to date";
-    blocklistSyncTime.textContent = "Just now";
   }
 
   /**
@@ -276,7 +197,7 @@ document.addEventListener("DOMContentLoaded", () => {
             type: isBlocked ? "ADD_CUSTOM_BLOCK" : "REMOVE_CUSTOM_BLOCK",
             rule: rule
           });
-          await updateSyncDisplay();
+          await updateStatCount();
         } catch (err) {
           console.warn("Could not sync block rule with background:", err);
         }

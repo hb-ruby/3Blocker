@@ -135,6 +135,8 @@ async function testBlocking() {
   await screenshot(ext, "popup.png");
   const appearance = await ext.evaluate(() => getComputedStyle(document.getElementById("domain-level-slider")).appearance);
   check(appearance === "none", "Popup slider uses custom styling in Firefox", appearance);
+  const syncCard = await ext.evaluate(() => !!document.getElementById("btn-refresh-blocklist"));
+  check(!syncCard, "Popup no longer shows the main blocklist card");
 
   // Main blocklist: domain and subdomain
   let r = await visit("http://pornhub.com/");
@@ -232,6 +234,20 @@ async function testOptionsPage(ext) {
   await sleep(300);
   check(!(await listed("allowlist-list")).includes("allowed.example.org"), "Options page removes an allowlist rule");
   await send(ext, { type: "REMOVE_ALLOWLIST", rule: "from-popup.example.org" });
+
+  // Main blocklist card: size, last update, and "Refresh now" (moved here from the popup)
+  const count = await opts.evaluate(() => document.getElementById("mainlist-count").textContent);
+  check(/^[\d,.\s]+ domains$/.test(count), "Options page shows the main blocklist size", count);
+  await opts.click("#mainlist-refresh");
+  await opts.waitForFunction(() => document.getElementById("mainlist-refresh").disabled, { timeout: 2000 }).catch(() => {});
+  await opts.waitForFunction(() => !document.getElementById("mainlist-refresh").disabled, { timeout: 90000 }).catch(() => {});
+  const sync = await opts.evaluate(() => ({
+    status: document.getElementById("mainlist-status").textContent,
+    time: document.getElementById("mainlist-time").textContent,
+    error: document.getElementById("mainlist-error").textContent
+  }));
+  check(sync.status === "Up to date" && sync.time.startsWith("Last checked") && !sync.error,
+    "Options page 'Refresh now' updates the main blocklist", JSON.stringify(sync));
   await opts.close();
 }
 

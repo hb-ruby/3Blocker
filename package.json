@@ -1,6 +1,6 @@
 {
   "name": "3blocker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Firefox extension that blocks adult websites. These scripts are for development only; the extension itself has no dependencies.",
   "scripts": {

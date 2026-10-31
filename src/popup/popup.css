@@ -37,7 +37,6 @@
 .site-badge,
 .section-title,
 .action-btn,
-.sync-title,
 .stat-num {
   font-weight: 900;
 }
@@ -475,119 +474,6 @@ input[type="range"]#domain-level-slider:focus-visible::-moz-range-thumb {
 .block-btn.blocked-state::before,
 .block-btn.blocked-state::after {
   opacity: 0;
-}
-
-/* Sync Card */
-.sync-card {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  gap: 12px;
-}
-
-.sync-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.sync-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.sync-title {
-  font-family: var(--font-display);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-
-.sync-count-badge {
-  font-size: 10px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  color: var(--yellow);
-}
-
-.sync-meta-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 10.5px;
-  color: var(--chalk-faint);
-}
-
-.sync-status {
-  color: var(--chalk-dim);
-}
-
-.sync-status.updating {
-  color: var(--yellow);
-  font-weight: 700;
-}
-
-.sync-status.error {
-  color: var(--yellow);
-  font-weight: 700;
-  text-decoration: underline wavy;
-}
-
-/* Round icon-only button; the label stays for screen readers and is updated by popup.js */
-.sync-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: transparent;
-  border: 1.5px solid var(--chalk-faint);
-  border-radius: 50%;
-  color: var(--chalk);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background-color 0.3s var(--ease), color 0.3s var(--ease), border-color 0.3s var(--ease);
-}
-
-.sync-btn:hover {
-  background: var(--yellow);
-  border-color: var(--yellow);
-  color: var(--ink);
-}
-
-.sync-btn:focus-visible {
-  outline: 2px solid var(--chalk);
-  outline-offset: 2px;
-}
-
-.sync-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  background: transparent;
-  border-color: var(--chalk-faint);
-  color: var(--chalk);
-}
-
-#refresh-btn-text {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-.refresh-icon.spinning {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 /* Footer */
