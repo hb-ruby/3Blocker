@@ -137,6 +137,11 @@ async function testBlocking() {
   check(appearance === "none", "Popup slider uses custom styling in Firefox", appearance);
   const syncCard = await ext.evaluate(() => !!document.getElementById("btn-refresh-blocklist"));
   check(!syncCard, "Popup no longer shows the main blocklist card");
+  const layout = await ext.evaluate(() => ({
+    footer: !!document.querySelector(".app-footer, #stat-count"),
+    listBtnInHeader: !!document.querySelector(".app-header #btn-open-list")
+  }));
+  check(!layout.footer && layout.listBtnInHeader, "Popup has no 'Sites Blocked' footer; options button is in the header", JSON.stringify(layout));
 
   // Main blocklist: domain and subdomain
   let r = await visit("http://pornhub.com/");

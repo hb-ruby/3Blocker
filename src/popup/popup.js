@@ -15,9 +15,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnBlockText = document.getElementById("btn-block-text");
   const btnOpenList = document.getElementById("btn-open-list");
 
-  // Footer Elements
-  const statCountEl = document.getElementById("stat-count");
-
   // State
   let currentUrl = null;
   let parsedDomain = {
@@ -35,7 +32,6 @@ document.addEventListener("DOMContentLoaded", () => {
   initCurrentTab();
   initSlider();
   initOptionsButton();
-  updateStatCount();
   updateSliderTrackBackground();
 
   function initOptionsButton() {
@@ -48,21 +44,6 @@ document.addEventListener("DOMContentLoaded", () => {
           console.log("Open Options Page requested.");
         }
       });
-    }
-  }
-
-  // Footer "Sites Blocked" stat: number of the user's custom block rules
-  async function updateStatCount() {
-    try {
-      const browserApi = (typeof browser !== "undefined") ? browser : (typeof chrome !== "undefined" ? chrome : null);
-      if (browserApi && browserApi.runtime && browserApi.runtime.sendMessage) {
-        const status = await browserApi.runtime.sendMessage({ type: "GET_STATUS" });
-        if (status && status.success && statCountEl) {
-          statCountEl.textContent = (status.customBlocksCount || 0).toString();
-        }
-      }
-    } catch (e) {
-      console.log("Could not query background status.");
     }
   }
 
@@ -197,7 +178,6 @@ document.addEventListener("DOMContentLoaded", () => {
             type: isBlocked ? "ADD_CUSTOM_BLOCK" : "REMOVE_CUSTOM_BLOCK",
             rule: rule
           });
-          await updateStatCount();
         } catch (err) {
           console.warn("Could not sync block rule with background:", err);
         }

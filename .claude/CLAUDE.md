@@ -35,7 +35,7 @@ All paths in `manifest.json` and `browser.runtime.getURL()` are relative to `src
 | `background/blocklist-core.js` | Pure logic, no browser APIs. Exposes `BlocklistCore` (global + CommonJS): hostname validation, list parsing, pre-swap validation, user-rule normalization, parent-domain expansion, URL precedence check, backoff calc. |
 | `background/db.js` | Exposes `BlocklistDB`. IndexedDB `3BlockerDB` (meta store + chunked domain store) with atomic version swap; user rules in `browser.storage.local` (`user_allowlist`, `user_custom_blocks`). Has a mock DB for tests. |
 | `background/background.js` | Holds in-memory Sets, intercepts top-level requests with blocking `webRequest.onBeforeRequest` and redirects blocked ones to `blocked/blocked.html?url=&reason=&match=`. Fetches live list (on start only if never fetched live or >1 day old), daily alarm, exponential-backoff retry alarm. Message API (below). |
-| `popup/` | Toolbar popup: current-tab block slider, "Sites Blocked" count, list button opens the options page. |
+| `popup/` | Toolbar popup: current-tab block slider; list button (header, next to "Active") opens the options page. |
 | `options/` | Options page (`options_ui`, opens in a tab): shows the user's custom blocklist and allowlist, add/remove rules, live-updates on `storage.onChanged`. Main blocklist card: domain count, status, last check, "Refresh now" (`REFRESH_BLOCKLIST_NOW`). |
 | `blocked/` | Block page: shows URL, reason, matched rule; "Go back" and "Allow site" (adds allowlist rule, then redirects). |
 | `lists/blocklist.txt` | ~18 MB bundled fallback list, committed to git (required at runtime — listed in `web_accessible_resources`). |
@@ -92,6 +92,7 @@ npm run sign         # AMO unlisted signing -> signed .xpi in dist/
 ## Changelog
 
 <!-- Newest first. One line per meaningful change. -->
+- 2026-10-31 — Removed the popup's "Sites Blocked" footer; the list/options button moved into the header next to the "Active" status. E2E checks the footer is gone and the button is in the header.
 - 2026-10-31 — v1.0.1. Moved the main blocklist status card (domain count, status, last check, "Refresh now") from the popup to the options page. Popup keeps the "Sites Blocked" count. E2E checks the popup card is gone and the options-page refresh works. Private windows: Firefox only supports spanning mode, so one background and one `storage.local` serve both; rules are shared (kept as is).
 - 2026-10-30 — Add-on ID changed to `3blocker@hb-ruby` (permanent). Added `npm run sign` (AMO unlisted), `.env.example`, `.env` gitignored. v1.0.0 signed and installed privately.
 - 2026-10-30 — Removed the bundled `custom-blocklist.txt` and its code (`loadBundledCustomBlocks`, `extraBlocks`, `parseRuleList`): the user's own blocklist covers it, and the allowlist overrode it anyway. Precedence is now three tiers. Wildcard rules still work in user rules. Next: delay on loosening actions (allow / remove block).

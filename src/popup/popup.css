@@ -36,8 +36,7 @@
 .brand-title,
 .site-badge,
 .section-title,
-.action-btn,
-.stat-num {
+.action-btn {
   font-weight: 900;
 }
 
@@ -101,11 +100,16 @@ body {
   to { stroke-dashoffset: 0; }
 }
 
+.header-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .header-status {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 3px;
 }
 
 .status-indicator {
@@ -474,35 +478,6 @@ input[type="range"]#domain-level-slider:focus-visible::-moz-range-thumb {
 .block-btn.blocked-state::before,
 .block-btn.blocked-state::after {
   opacity: 0;
-}
-
-/* Footer */
-.app-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 2px;
-}
-
-.footer-stat {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.stat-num {
-  font-family: var(--font-display);
-  font-size: 22px;
-  line-height: 1;
-  color: var(--yellow);
-}
-
-.stat-label {
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--chalk-dim);
 }
 
 .icon-btn {
