@@ -51,6 +51,7 @@ function runTests() {
   testWildcardRules();
   testNormalizeRule();
   testPopupRules();
+  testMainBlocklistMatchForRule();
 
   print("\n==========================================");
   print(`Results: ${passedTests}/${totalTests} tests passed.`);
@@ -202,14 +203,29 @@ function testPrecedenceRules() {
   assert(r2.blocked, "sub.deep.adult-hub.com is blocked by parent adult-hub.com");
   assertEqual(r2.matchedRule, "adult-hub.com", "Matched parent rule");
 
-  // 3. User Allowlist overrides Main Blocklist
+  // 3. The allowlist can't override the main blocklist
   const r3 = Core.checkUrlPrecedence("https://allowed.adult-hub.com/home", stores);
-  assert(!r3.blocked, "allowed.adult-hub.com is allowed despite adult-hub.com in blocklist");
-  assertEqual(r3.reason, "allowlisted", "Reason is allowlisted");
+  assert(r3.blocked, "allowed.adult-hub.com stays blocked although it is allowlisted");
+  assertEqual(r3.reason, "main_blocklist", "Reason is main_blocklist, not allowlisted");
 
-  // 4. Exact page allowlist overrides domain block
+  // 4. Not even an exact-page allowlist rule
   const r4 = Core.checkUrlPrecedence("https://evil.com/safe-portal", stores);
-  assert(!r4.blocked, "evil.com/safe-portal is allowed despite evil.com in main blocklist");
+  assert(r4.blocked && r4.reason === "main_blocklist", "evil.com/safe-portal stays blocked by the main blocklist");
+
+  // 4b. Wildcard allowlist rules can't either
+  const wild = { ...stores, allowlist: new Set(["*adult*"]) };
+  assert(Core.checkUrlPrecedence("https://adult-hub.com/", wild).blocked, "A wildcard allowlist rule can't override the main blocklist");
+
+  // 4c. The allowlist still carves exceptions out of custom blocks
+  const carve = { allowlist: new Set(["reddit.com/r/science"]), customBlocks: new Set(["reddit.com"]), mainBlocklistSet: new Set(["nsfw.reddit.com"]) };
+  const c1 = Core.checkUrlPrecedence("https://www.reddit.com/r/science", carve);
+  assert(c1.blocked && c1.reason === "custom_block", "Page allow rule doesn't match another host (www.)");
+  const c2 = Core.checkUrlPrecedence("https://reddit.com/r/science", carve);
+  assert(!c2.blocked && c2.reason === "allowlisted", "Allowlist overrides a custom block");
+  const carveSite = { ...carve, allowlist: new Set(["reddit.com"]) };
+  assert(!Core.checkUrlPrecedence("https://old.reddit.com/", carveSite).blocked, "Allowlisting a site lifts its custom block");
+  const c3 = Core.checkUrlPrecedence("https://nsfw.reddit.com/", carveSite);
+  assert(c3.blocked && c3.reason === "main_blocklist", "Allowlisting a parent domain doesn't free a main-listed subdomain");
 
   // 5. Custom Blocklist works for unlisted domain
   const r5 = Core.checkUrlPrecedence("https://custom-distraction.com/feed", stores);
@@ -323,6 +339,20 @@ function testPopupRules() {
   assert(Core.checkUrlPrecedence("https://old.reddit.com/r/x", stores).blocked, "A site rule blocks the other subdomains");
   assert(Core.checkUrlPrecedence("https://www.youtube.com/watch?v=abc", stores).blocked, "A page rule blocks that page");
   assert(!Core.checkUrlPrecedence("https://www.youtube.com/watch?v=xyz", stores).blocked, "A page rule leaves other queries open");
+}
+
+function testMainBlocklistMatchForRule() {
+  print("\n--- Allowlist rules that the main blocklist would override ---");
+  const main = new Set(["adult-hub.com", "nsfw.reddit.com"]);
+  const m = (rule) => Core.mainBlocklistMatchForRule(rule, main);
+  assertEqual(m("adult-hub.com"), "adult-hub.com", "A listed domain is refused");
+  assertEqual(m("www.adult-hub.com"), "adult-hub.com", "A subdomain of a listed domain is refused");
+  assertEqual(m("adult-hub.com/some/page?x=1"), "adult-hub.com", "A page on a listed domain is refused");
+  assertEqual(m("adult-hub.com:8080/x"), "adult-hub.com", "A port doesn't hide the host");
+  assertEqual(m("nsfw.reddit.com/r/x"), "nsfw.reddit.com", "A listed subdomain is refused");
+  assertEqual(m("reddit.com"), null, "A parent of a listed subdomain is allowed (the subdomain stays blocked)");
+  assertEqual(m("example.com"), null, "An unlisted domain is allowed");
+  assertEqual(m("adult-hub.com*"), null, "A wildcard host can't be checked (precedence still blocks it)");
 }
 
 // Execute tests

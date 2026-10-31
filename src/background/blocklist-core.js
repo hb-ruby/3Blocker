@@ -289,10 +289,9 @@
   }
 
   /**
-   * Check a URL against User Allowlist, User Custom Blocks, and Main Blocklist Set.
-   * User allowlist always takes highest precedence.
-   * User custom blocks take second precedence.
-   * Main blocklist takes third precedence.
+   * Check a URL against the Main Blocklist Set, User Allowlist, and User Custom Blocks.
+   * The main blocklist comes first, so the allowlist can't override it; the allowlist only
+   * carves exceptions out of the user's own custom blocks, which come last.
    *
    * @param {string} urlString
    * @param {object} stores
@@ -321,27 +320,46 @@
     const allowlistSet = toSet(stores.allowlist);
     const mainSet = toSet(stores.mainBlocklistSet);
 
-    // 1. PRECEDENCE: User Allowlist (Always takes first precedence)
-    const allowed = findMatchingRule(allowlistSet, exactPageUrl, parentDomains, pathAndQuery);
-    if (allowed) {
-      return { blocked: false, reason: "allowlisted", matchedRule: allowed };
-    }
-
-    // 2. PRECEDENCE: User Custom Blocklist
-    const blockedBy = findMatchingRule(toSet(stores.customBlocks), exactPageUrl, parentDomains, pathAndQuery);
-    if (blockedBy) {
-      return { blocked: true, reason: "custom_block", matchedRule: blockedBy };
-    }
-
-    // 3. PRECEDENCE: Main Blocklist (checks host and parent domains against the set)
+    // 1. Main blocklist (host and parent domains): nothing can allow these
     for (const d of parentDomains) {
       if (mainSet.has(d)) {
         return { blocked: true, reason: "main_blocklist", matchedRule: d };
       }
     }
 
+    // 2. User allowlist: carve-outs from the user's own blocks
+    const allowed = findMatchingRule(allowlistSet, exactPageUrl, parentDomains, pathAndQuery);
+    if (allowed) {
+      return { blocked: false, reason: "allowlisted", matchedRule: allowed };
+    }
+
+    // 3. User custom blocks
+    const blockedBy = findMatchingRule(toSet(stores.customBlocks), exactPageUrl, parentDomains, pathAndQuery);
+    if (blockedBy) {
+      return { blocked: true, reason: "custom_block", matchedRule: blockedBy };
+    }
+
     // 4. Not blocked
     return { blocked: false, reason: "allowed", matchedRule: null };
+  }
+
+  /**
+   * The main-blocklist domain a user rule's host falls under (the host itself or a parent),
+   * or null. Used to refuse allowlist rules that could never take effect. A rule with `*` in
+   * its host can't be checked this way; the precedence order still keeps it from working.
+   *
+   * @param {string} rule - a normalized rule (`host`, `host/path?query`, or a wildcard pattern)
+   * @param {Set<string>} mainSet
+   * @returns {string|null}
+   */
+  function mainBlocklistMatchForRule(rule, mainSet) {
+    if (typeof rule !== "string" || !mainSet) return null;
+    const host = rule.split(/[/?]/)[0].replace(/:\d+$/, "");
+    if (!host || host.includes("*")) return null;
+    for (const d of getParentDomains(host)) {
+      if (mainSet.has(d)) return d;
+    }
+    return null;
   }
 
   /**
@@ -370,6 +388,7 @@
     normalizeRule,
     popupRulesForUrl,
     checkUrlPrecedence,
+    mainBlocklistMatchForRule,
     calculateBackoffDelay
   };
 

@@ -225,6 +225,16 @@ body {
   border-color: var(--chalk);
 }
 
+.btn[hidden] {
+  display: none;
+}
+
+.allow-note {
+  font-size: 12px;
+  color: var(--chalk-faint);
+  word-break: break-word;
+}
+
 .blocked-footer {
   font-family: var(--font-display);
   font-size: 12px;

@@ -14,34 +14,36 @@ straight to 3Blocker's block page instead.
                    │
                    ▼
    ┌───────────────────────────────┐
-   │ 1. Your allowlist             │── match ──▶  page loads
-   └───────────────────────────────┘
-                   │ no match
-                   ▼
-   ┌───────────────────────────────┐
-   │ 2. Your blocklist             │── match ──▶  block page
-   └───────────────────────────────┘
-                   │ no match
-                   ▼
-   ┌───────────────────────────────┐
-   │ 3. Adult site list            │── match ──▶  block page
+   │ 1. Adult site list            │── match ──▶  block page
    │    (~950,000 domains)         │
+   └───────────────────────────────┘
+                   │ no match
+                   ▼
+   ┌───────────────────────────────┐
+   │ 2. Your allowlist             │── match ──▶  page loads
+   └───────────────────────────────┘
+                   │ no match
+                   ▼
+   ┌───────────────────────────────┐
+   │ 3. Your blocklist             │── match ──▶  block page
    └───────────────────────────────┘
                    │ no match
                    ▼
               page loads
 ```
 
-Because the allowlist is checked first, allowing a site overrides every block, including
-the adult site list. Allowing a site never edits the adult site list, so removing it from
-the allowlist brings that block back. A rule can't be on both of your own lists at once:
-adding it to one removes it from the other.
+The adult site list is checked first, so nothing can unblock a site on it: not the
+allowlist, and not "Allow this site" (the block page only offers that button for sites on
+your own blocklist). The allowlist is for exceptions to your own blocks, e.g. block
+`reddit.com` but allow `reddit.com/r/science*`. Adding a site on the adult list to the
+allowlist is refused. A rule can't be on both of your own lists at once: adding it to one
+removes it from the other.
 
 ### The three lists
 
 | List | Where it comes from | Can you change it? |
 |---|---|---|
-| Your allowlist | "Allow this site" on the block page, or the options page | Yes |
+| Your allowlist | "Allow this site" on the block page (for your own blocks), or the options page | Yes |
 | Your blocklist | The popup's "Block site" / "Block page" buttons, or the options page | Yes |
 | Adult site list | [Block List Project](https://blocklistproject.github.io/Lists/) porn list, refreshed daily (or with "Refresh now" on the options page); a bundled copy is used until the first download | No |
 

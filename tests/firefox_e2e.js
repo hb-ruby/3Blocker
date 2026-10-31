@@ -153,6 +153,11 @@ async function testBlocking() {
   }));
   check(details.reason.length > 0 && details.match.endsWith("xvideos.com"), "Block page shows reason and matched rule", JSON.stringify(details));
   await screenshot(r.page, "blocked.png");
+  const mainActions = await r.page.evaluate(() => ({
+    allowShown: !document.getElementById("btn-allow-site").hidden,
+    note: document.getElementById("allow-note").hidden ? "" : document.getElementById("allow-note").textContent
+  }));
+  check(!mainActions.allowShown && mainActions.note.length > 0, "Block page offers no 'Allow this site' for main-list blocks", JSON.stringify(mainActions));
 
   // Unlisted site
   r = await visit("https://example.com/");
@@ -169,13 +174,27 @@ async function testBlocking() {
   const afterAllow = await send(ext, { type: "CHECK_URL", url: "https://example.com/" });
   check(afterAllow.blocked === false && afterAllow.reason === "allowlisted", "Allowlist overrides the custom block", JSON.stringify(afterAllow));
 
-  await send(ext, { type: "ADD_ALLOWLIST", rule: "pornhub.com" });
+  // The main blocklist can't be allowlisted: adds are refused...
+  const refused = await send(ext, { type: "ADD_ALLOWLIST", rule: "https://www.pornhub.com/some/page" });
+  check(!refused.success && /main blocklist/.test(refused.error || ""), "Allowlist refuses a page on a main-listed domain", JSON.stringify(refused));
+  const refusedSite = await send(ext, { type: "ADD_ALLOWLIST", rule: "pornhub.com" });
+  check(!refusedSite.success && !(await send(ext, { type: "GET_USER_RULES" })).allowlist.includes("pornhub.com"),
+    "Allowlist refuses a main-listed domain and stores nothing", JSON.stringify(refusedSite));
+  // ...and an allowlist rule saved before this change is kept but has no effect
+  await ext.evaluate(async () => {
+    const { user_allowlist = [] } = await browser.storage.local.get("user_allowlist");
+    await browser.storage.local.set({ user_allowlist: [...user_allowlist, "pornhub.com"] });
+  });
+  await sleep(300);
   const ph = await send(ext, { type: "CHECK_URL", url: "https://pornhub.com/" });
-  check(ph.blocked === false, "Allowlist overrides the main blocklist", JSON.stringify(ph));
+  check(ph.blocked && ph.reason === "main_blocklist", "An old allowlist rule can't override the main blocklist", JSON.stringify(ph));
+  r = await visit("https://pornhub.com/");
+  check(r.url.startsWith(BLOCKED) && r.url.includes("reason=main_blocklist"), "Main-listed site stays blocked with an old allowlist rule", r.url.slice(0, 120));
+  check((await send(ext, { type: "GET_USER_RULES" })).allowlist.includes("pornhub.com"), "Old allowlist rules are left in place");
   await send(ext, { type: "REMOVE_ALLOWLIST", rule: "pornhub.com" });
 
   // In-page (pushState) navigation to a blocked URL. example.com was allowlisted above,
-  // and the allowlist overrides every block rule, so remove that first.
+  // and the allowlist overrides custom block rules, so remove that first.
   await send(ext, { type: "REMOVE_ALLOWLIST", rule: "example.com" });
   await send(ext, { type: "ADD_CUSTOM_BLOCK", rule: "example.com*type=media*" });
   r = await visit("https://example.com/");
@@ -185,8 +204,14 @@ async function testBlocking() {
     el.textContent = 'history.pushState({}, "", "/search?q=x&type=media");';
     document.head.appendChild(el);
   });
-  const spa = await waitForLanding(r.page, 5000);
-  check(spa.url.startsWith(BLOCKED), "pushState to a blocked URL redirects to block page", `${spa.ms} ms`);
+  // The page is already loaded, so waitForLanding would return at once; wait for the block page itself
+  const spaStart = Date.now();
+  let spaUrl = "";
+  while (Date.now() - spaStart < 5000 && !spaUrl.startsWith(BLOCKED)) {
+    await sleep(50);
+    spaUrl = await currentUrl(r.page);
+  }
+  check(spaUrl.startsWith(BLOCKED), "pushState to a blocked URL redirects to block page", `${Date.now() - spaStart} ms`);
 
   await testOptionsPage(ext);
   await testPopupBlocking(ext);
@@ -281,6 +306,14 @@ async function testOptionsPage(ext) {
   await sleep(300);
   const err = await opts.evaluate(() => document.getElementById("blocklist-error").textContent);
   check(err.length > 0, "Options page rejects an invalid rule", err);
+
+  await opts.type("#allowlist-input", "xvideos.com");
+  await opts.click("#allowlist-form button");
+  await sleep(300);
+  const mainErr = await opts.evaluate(() => document.getElementById("allowlist-error").textContent);
+  check(/main blocklist/.test(mainErr) && !(await listed("allowlist-list")).includes("xvideos.com"),
+    "Options page explains that main-listed sites can't be allowed", mainErr);
+  await opts.evaluate(() => { document.getElementById("allowlist-input").value = ""; });
 
   await opts.type("#allowlist-input", "allowed.example.org");
   await opts.click("#allowlist-form button");

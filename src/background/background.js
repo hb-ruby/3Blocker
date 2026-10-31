@@ -402,6 +402,11 @@ async function handleMessage(message) {
     case "ADD_ALLOWLIST": {
       const rule = BlocklistCore.normalizeRule(message.rule);
       if (!rule) return { success: false, error: "Not a valid rule" };
+      // The main blocklist beats the allowlist, so such a rule would never do anything
+      const listed = BlocklistCore.mainBlocklistMatchForRule(rule, activeBlocklistSet);
+      if (listed) {
+        return { success: false, error: `${listed} is on the main blocklist and can't be allowed.`, mainBlocklist: listed };
+      }
       userAllowlist.add(rule);
       // If rule was also in custom blocks, remove it to resolve conflict
       userCustomBlocks.delete(rule);

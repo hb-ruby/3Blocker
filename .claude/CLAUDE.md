@@ -37,7 +37,7 @@ All paths in `manifest.json` and `browser.runtime.getURL()` are relative to `src
 | `background/background.js` | Holds in-memory Sets, intercepts top-level requests with blocking `webRequest.onBeforeRequest` and redirects blocked ones to `blocked/blocked.html?url=&reason=&match=`. Fetches live list (on start only if never fetched live or >1 day old), daily alarm, exponential-backoff retry alarm. Message API (below). |
 | `popup/` | Toolbar popup: "Block site" / "Block page" for the current tab (also loads `background/blocklist-core.js` for `popupRulesForUrl`); list button (header, next to "Active") opens the options page. Only adds blocks, never unblocks. |
 | `options/` | Options page (`options_ui`, opens in a tab): shows the user's custom blocklist and allowlist, add/remove rules, live-updates on `storage.onChanged`. Main blocklist card: domain count, status, last check, "Refresh now" (`REFRESH_BLOCKLIST_NOW`). |
-| `blocked/` | Block page: shows URL, reason, matched rule; "Go back" and "Allow site" (adds allowlist rule, then redirects). |
+| `blocked/` | Block page: shows URL, reason, matched rule; "Go back", and for custom blocks only "Allow this site" (adds allowlist rule, then redirects; shows the error instead if refused). Main-list blocks show a "can't be allowed" note. |
 | `lists/blocklist.txt` | ~18 MB bundled fallback list, committed to git (required at runtime — listed in `web_accessible_resources`). |
 | `tests/test_blocklist.js` | Unit tests for core + DB API surface (uses `print`, works under `gjs` from the repo root, or Node). |
 | `tests/firefox_e2e.js` | End-to-end tests in real headless Firefox (Puppeteer over WebDriver BiDi), installs `src/`. |
@@ -45,7 +45,7 @@ All paths in `manifest.json` and `browser.runtime.getURL()` are relative to `src
 
 ## Blocking rules
 
-Precedence (in `checkUrlPrecedence`): **user allowlist > user custom blocks > main blocklist** (first match wins). Only `http(s)`. Allowlist and custom rules match an exact `host/path?query` string, the host / any parent domain (never a bare TLD), or — if the rule contains `*` — a wildcard pattern tested against `domain/path?query` for the host and each parent domain (so `reddit.com/register*` covers `www.`/`old.reddit.com`, but not `notreddit.com`). The main blocklist is domains only.
+Precedence (in `checkUrlPrecedence`): **main blocklist > user allowlist > user custom blocks** (first match wins). Nothing can allow a main-listed site; the allowlist only carves exceptions out of custom blocks. `ADD_ALLOWLIST` refuses a rule whose host (or a parent) is main-listed (`BlocklistCore.mainBlocklistMatchForRule`; wildcard hosts can't be checked but precedence still blocks them). Allowlist rules saved before this, or for domains the list adds later, are kept but have no effect. Only `http(s)`. Allowlist and custom rules match an exact `host/path?query` string, the host / any parent domain (never a bare TLD), or — if the rule contains `*` — a wildcard pattern tested against `domain/path?query` for the host and each parent domain (so `reddit.com/register*` covers `www.`/`old.reddit.com`, but not `notreddit.com`). The main blocklist is domains only.
 
 Besides page requests, `webNavigation.onHistoryStateUpdated` catches single-page-app URL changes (`pushState`, e.g. Reddit switching search tabs) and redirects the tab. In-page modals that don't change the URL can't be caught.
 
@@ -55,7 +55,7 @@ Popup buttons (`BlocklistCore.popupRulesForUrl`): **Block site** = the host with
 
 ## Message API (`browser.runtime.sendMessage`)
 
-`GET_STATUS`, `REFRESH_BLOCKLIST_NOW`, `CHECK_URL {url}`, `GET_USER_RULES` (→ sorted `allowlist`, `customBlocks` arrays), `ADD_CUSTOM_BLOCK {rule}` (also removes the same rule from the allowlist), `REMOVE_CUSTOM_BLOCK {rule}`, `ADD_ALLOWLIST {rule}` (also removes the same rule from custom blocks), `REMOVE_ALLOWLIST {rule}`.
+`GET_STATUS`, `REFRESH_BLOCKLIST_NOW`, `CHECK_URL {url}`, `GET_USER_RULES` (→ sorted `allowlist`, `customBlocks` arrays), `ADD_CUSTOM_BLOCK {rule}` (also removes the same rule from the allowlist), `REMOVE_CUSTOM_BLOCK {rule}`, `ADD_ALLOWLIST {rule}` (also removes the same rule from custom blocks; refused with `{success:false, error, mainBlocklist}` if the rule's host is on the main blocklist), `REMOVE_ALLOWLIST {rule}`.
 
 Adds run the rule through `BlocklistCore.normalizeRule` (lowercase, trim, strip `scheme://` and `#fragment`; reject empty, whitespace, or no `.`/`*`) and answer `{success:false, error:"Not a valid rule"}` if it fails. Removes take the stored string as-is.
 
@@ -85,13 +85,14 @@ npm run sign         # AMO unlisted signing -> signed .xpi in dist/
 - Each signing needs a new `version` in `src/manifest.json` (AMO rejects re-signing a version). Install the `.xpi` via `about:addons` → gear → Install Add-on From File; same ID keeps the user's rules.
 
 - `test:firefox` needs Firefox ≥ 140 and network access. `FIREFOX_BIN` picks the binary (default `firefox` on PATH); `SCREENSHOT_DIR` saves popup/block-page screenshots. Each run uses a fresh temp profile.
-- E2E covers: list load, popup layout and Block site / Block page (rules, tab sent to block page, disabled on non-web and block pages), main-list domain/subdomain blocking, block page details, custom block, options page (list/add/remove/invalid input/live update, main-list count + "Refresh now"), "Allow this site", allowlist precedence, pushState blocking, no console errors, and blocking after Firefox unloads the idle event page.
+- E2E covers: list load, popup layout and Block site / Block page (rules, tab sent to block page, disabled on non-web and block pages), main-list domain/subdomain blocking, block page details, custom block, options page (list/add/remove/invalid input/live update, main-list count + "Refresh now"), "Allow this site" (custom blocks only), main blocklist beats the allowlist (adds refused on the API and options page, old rules kept but inert), allowlist overrides custom blocks, pushState blocking, no console errors, and blocking after Firefox unloads the idle event page.
 - WebDriver BiDi quirks the e2e works around: scripting extension pages needs `MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1`; it can't navigate directly to `moz-extension://` URLs (hop via the web-accessible `blocked.html`); a tab showing an extension page can't be navigated away (use a new tab per step); `page.url()` misses extension redirects (read `location.href`).
 - Dev machine has system Node 20 / npm 9 and Firefox ESR 153 (`/usr/bin/firefox`), installed via apt. `npm test` works with no env vars.
 
 ## Changelog
 
 <!-- Newest first. One line per meaningful change. -->
+- 2026-10-31 — Main blocklist can no longer be allowlisted: precedence is now main blocklist > allowlist > custom blocks; the allowlist only carves exceptions out of custom blocks. `ADD_ALLOWLIST` refuses main-listed hosts (options page shows the reason); block page shows "Allow this site" for custom blocks only. Existing allowlist rules are kept (inert if main-listed). Fixed a race in the pushState e2e check.
 - 2026-10-31 — Replaced the popup's 3-level block slider (and its unblock toggle) with two buttons: "Block site" (host without `www.`) and "Block page" (exact address incl. query). Rule logic in `BlocklistCore.popupRulesForUrl` (unit-tested); popup reloads the tab onto the block page. E2E drives the popup against real tabs. Removed the root-domain guess (and its `co.uk` problem).
 - 2026-10-31 — Removed `.env.example` (no longer needed); signing credentials live only in the local, gitignored `.env`.
 - 2026-10-31 — Removed the popup's "Sites Blocked" footer; the list/options button moved into the header next to the "Active" status. E2E checks the footer is gone and the button is in the header.

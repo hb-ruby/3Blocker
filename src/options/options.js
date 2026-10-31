@@ -34,7 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         list.error.textContent = res && res.error === "Not a valid rule"
           ? "Enter a domain like example.com, a page, or a pattern with *."
-          : "Could not save the rule.";
+          : (res && res.error) || "Could not save the rule.";
       }
       list.input.focus();
     });
