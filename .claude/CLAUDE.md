@@ -16,7 +16,8 @@ Firefox runs the MV3 background as an event page and unloads it after ~30 s idle
 ## Architecture
 
 ```
-README.md            only file at the top level (plus package.json / lock, required there by npm)
+README.md            only file at the top level (plus LICENSE, and package.json / lock, required there by npm)
+LICENSE              MIT, copyright hb-ruby (covers 3Blocker's code, not the bundled blocklist)
 .claude/CLAUDE.md    these notes
 src/                 the extension itself — the only folder that gets packaged
   manifest.json
@@ -92,6 +93,10 @@ npm run sign         # AMO unlisted signing -> signed .xpi in dist/
 - Dev machine has system Node 20 / npm 9 and Firefox ESR 153 (`/usr/bin/firefox`), installed via apt. `npm test` works with no env vars.
 
 ## Changelog
+
+- 2026-10-31 — Added an MIT `LICENSE` (copyright hb-ruby) at the top level; README license line and `package.json` `license` updated to match.
+
+- 2026-10-31 — README: moved the source status shields from Usage to the bottom, under the Block List Project credit.
 
 <!-- Newest first. One line per meaningful change. -->
 - 2026-10-31 — Source list repo `blocklistproject/Lists` was archived (2026-10-27). Options page now shows its status (active / archived / deleted) from the GitHub API; README has shields.io badges for the same. Fixed the stale options-page subtitle ("allowlist wins over every block"). Moved "Bolton Browser Blocker" from the README to these notes.
