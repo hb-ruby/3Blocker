@@ -52,6 +52,7 @@ function runTests() {
   testNormalizeRule();
   testPopupRules();
   testMainBlocklistMatchForRule();
+  testSourceRepoState();
 
   print("\n==========================================");
   print(`Results: ${passedTests}/${totalTests} tests passed.`);
@@ -353,6 +354,17 @@ function testMainBlocklistMatchForRule() {
   assertEqual(m("reddit.com"), null, "A parent of a listed subdomain is allowed (the subdomain stays blocked)");
   assertEqual(m("example.com"), null, "An unlisted domain is allowed");
   assertEqual(m("adult-hub.com*"), null, "A wildcard host can't be checked (precedence still blocks it)");
+}
+
+function testSourceRepoState() {
+  print("\n--- Main blocklist source repo status ---");
+  assertEqual(Core.SOURCE_REPO_API, "https://api.github.com/repos/blocklistproject/Lists", "Checks the repo behind the list URL");
+  assertEqual(Core.sourceRepoState(200, { archived: true }), "archived", "Archived repo");
+  assertEqual(Core.sourceRepoState(200, { archived: false }), "active", "Active repo");
+  assertEqual(Core.sourceRepoState(404, { message: "Not Found" }), "deleted", "Deleted repo (404)");
+  assertEqual(Core.sourceRepoState(403, { message: "API rate limit exceeded" }), "unknown", "Rate limited is unknown, not deleted");
+  assertEqual(Core.sourceRepoState(0, null), "unknown", "Network failure is unknown");
+  assertEqual(Core.sourceRepoState(200, {}), "unknown", "Unexpected answer is unknown");
 }
 
 // Execute tests

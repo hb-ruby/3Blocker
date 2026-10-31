@@ -6,6 +6,9 @@
   "use strict";
 
   const LIVE_BLOCKLIST_URL = "https://blocklistproject.github.io/Lists/alt-version/porn-nl.txt";
+  // GitHub repo behind LIVE_BLOCKLIST_URL; the options page shows whether it is active, archived or gone
+  const SOURCE_REPO = "blocklistproject/Lists";
+  const SOURCE_REPO_API = `https://api.github.com/repos/${SOURCE_REPO}`;
   const BASE_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes
   const MAX_BACKOFF_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -363,6 +366,20 @@
   }
 
   /**
+   * Read the GitHub API answer for SOURCE_REPO_API: 404 means the repo was deleted (or made
+   * private); 200 tells archived from active. Anything else (rate limit, network) is unknown.
+   *
+   * @param {number} httpStatus - 0 if the request failed
+   * @param {object|null} body - parsed JSON for a 200
+   * @returns {"active"|"archived"|"deleted"|"unknown"}
+   */
+  function sourceRepoState(httpStatus, body) {
+    if (httpStatus === 404) return "deleted";
+    if (httpStatus !== 200 || !body || typeof body.archived !== "boolean") return "unknown";
+    return body.archived ? "archived" : "active";
+  }
+
+  /**
    * Exponential backoff calculation for retry attempts.
    *
    * @param {number} retryCount - current number of consecutive retries
@@ -379,6 +396,8 @@
   // Export module for both browser and Node/CJS environments
   const CoreModule = {
     LIVE_BLOCKLIST_URL,
+    SOURCE_REPO,
+    SOURCE_REPO_API,
     BASE_BACKOFF_MS,
     MAX_BACKOFF_MS,
     isValidHostname,
@@ -389,7 +408,8 @@
     popupRulesForUrl,
     checkUrlPrecedence,
     mainBlocklistMatchForRule,
-    calculateBackoffDelay
+    calculateBackoffDelay,
+    sourceRepoState
   };
 
   if (typeof module !== "undefined" && module.exports) {

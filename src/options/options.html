@@ -14,7 +14,7 @@
       <svg class="scribble" viewBox="0 0 120 14" width="120" height="14" aria-hidden="true">
         <path d="M2 9 C8 1, 12 1, 14 8 S20 13, 24 5 S32 1, 34 8 S40 13, 45 5 S53 1, 55 8 S61 13, 66 5 S74 1, 76 8 S82 13, 87 5 S95 1, 97 8 S104 12, 118 4"/>
       </svg>
-      <p class="page-subtitle">Your own block and allow rules. The allowlist wins over every block.</p>
+      <p class="page-subtitle">Your own block and allow rules. The allowlist makes exceptions to your blocklist; the main blocklist always blocks.</p>
     </header>
 
     <section class="rule-card" id="blocklist-card">
@@ -59,6 +59,11 @@
         <button class="btn btn-secondary" id="mainlist-refresh" type="button">Refresh now</button>
       </div>
       <p class="form-error" id="mainlist-error" role="alert"></p>
+      <p class="source-row">
+        Source repo
+        <a href="https://github.com/blocklistproject/Lists" target="_blank" rel="noopener noreferrer">blocklistproject/Lists</a>:
+        <span class="source-state" id="source-state">Checking…</span>
+      </p>
     </section>
 
     <section class="help-box">
@@ -71,6 +76,7 @@
     </section>
   </main>
 
+  <script src="../background/blocklist-core.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

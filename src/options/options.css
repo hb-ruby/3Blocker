@@ -292,6 +292,32 @@ body {
   cursor: not-allowed;
 }
 
+.source-row {
+  font-size: 12.5px;
+  color: var(--chalk-faint);
+}
+
+.source-row a {
+  color: var(--chalk-dim);
+}
+
+.source-state {
+  font-weight: 700;
+  color: var(--chalk);
+}
+
+.source-state.warn {
+  color: var(--yellow);
+}
+
+.source-state.error {
+  color: var(--red);
+}
+
+.source-state.muted {
+  color: var(--chalk-faint);
+}
+
 /* Rule format help */
 .help-box {
   color: var(--chalk-dim);

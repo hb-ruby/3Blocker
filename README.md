@@ -1,7 +1,5 @@
 # 3Blocker
 
-Bolton Browser Blocker
-
 A simple Firefox extension that blocks adult websites, plus any other sites you add yourself.
 It only blocks: there are no timers, schedules or statistics.
 
@@ -23,6 +21,13 @@ the old one. Your own rules are kept.
 The main blocklist is the [Block List Project](https://blocklistproject.github.io/Lists/) porn list
 (about 950,000 domains). It's always on and **can't be overridden**: nothing you do in 3Blocker
 unblocks a site on it.
+
+Source status:
+![source repo archived](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2Fblocklistproject%2FLists&query=%24.archived&label=source%20repo%20archived)
+![source last commit](https://img.shields.io/github/last-commit/blocklistproject/Lists?label=source%20last%20commit)
+![list URL](https://img.shields.io/website?url=https%3A%2F%2Fblocklistproject.github.io%2FLists%2Falt-version%2Fporn-nl.txt&label=list%20URL)
+(`true` = archived, read-only; `resource not found` = the repo was deleted.) The options page shows
+the same status.
 
 On top of that you have two lists of your own:
 

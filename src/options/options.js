@@ -118,6 +118,32 @@ document.addEventListener("DOMContentLoaded", () => {
       : "Using the bundled list (not updated online yet)";
   }
 
+  // Is the list's GitHub repo still maintained? Asked once per page load (GitHub allows 60 unauthenticated requests an hour).
+  const SOURCE_STATES = {
+    active: ["Active", ""],
+    archived: ["Archived (read-only): the list no longer gets updates", "warn"],
+    deleted: ["Deleted: the last downloaded list stays in use", "error"],
+    unknown: ["Couldn't check", "muted"]
+  };
+
+  async function refreshSourceState() {
+    const el = document.getElementById("source-state");
+    let httpStatus = 0;
+    let body = null;
+    try {
+      const res = await fetch(BlocklistCore.SOURCE_REPO_API, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" });
+      httpStatus = res.status;
+      body = await res.json().catch(() => null);
+    } catch (e) {
+      // offline: stays unknown
+    }
+    const state = BlocklistCore.sourceRepoState(httpStatus, body);
+    const [text, cls] = SOURCE_STATES[state];
+    el.textContent = text;
+    el.className = `source-state ${cls}`.trim();
+    el.dataset.state = state;
+  }
+
   mainlist.button.addEventListener("click", async () => {
     mainlist.button.disabled = true;
     mainlist.button.textContent = "Updating…";
@@ -135,7 +161,7 @@ document.addEventListener("DOMContentLoaded", () => {
     mainlist.button.textContent = "Refresh now";
   });
 
-  // Stay in sync when rules change elsewhere (popup slider, block page "Allow this site")
+  // Stay in sync when rules change elsewhere (popup buttons, block page "Allow this site")
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && (changes.user_allowlist || changes.user_custom_blocks)) {
       refresh();
@@ -144,4 +170,5 @@ document.addEventListener("DOMContentLoaded", () => {
 
   refresh();
   refreshStatus();
+  refreshSourceState();
 });

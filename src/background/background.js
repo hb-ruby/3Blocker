@@ -269,7 +269,7 @@ function clearRetryAlarm() {
 
 /**
  * Request Interception & Redirection:
- * Checks top-level page requests against Allowlist, Custom Blocks, and Main Blocklist.
+ * Checks top-level page requests against the Main Blocklist, Allowlist, and Custom Blocks (in that order).
  * If blocked, the request is redirected to the local blocked/blocked.html before anything is sent.
  * Firefox holds the request while this (async) blocking listener runs, including while a
  * suspended event page wakes up and reloads the lists.

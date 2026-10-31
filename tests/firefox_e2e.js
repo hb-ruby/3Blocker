@@ -340,6 +340,14 @@ async function testOptionsPage(ext) {
   // Main blocklist card: size, last update, and "Refresh now" (moved here from the popup)
   const count = await opts.evaluate(() => document.getElementById("mainlist-count").textContent);
   check(/^[\d,.\s]+ domains$/.test(count), "Options page shows the main blocklist size", count);
+  await opts.waitForFunction(() => document.getElementById("source-state").dataset.state, { timeout: 15000 }).catch(() => {});
+  const source = await opts.evaluate(() => ({
+    state: document.getElementById("source-state").dataset.state || "",
+    text: document.getElementById("source-state").textContent
+  }));
+  // The real answer changes with upstream, so only check that it resolved to a known state
+  check(["active", "archived", "deleted", "unknown"].includes(source.state) && source.text !== "Checking…",
+    "Options page shows the source repo status", JSON.stringify(source));
   await opts.click("#mainlist-refresh");
   await opts.waitForFunction(() => document.getElementById("mainlist-refresh").disabled, { timeout: 2000 }).catch(() => {});
   await opts.waitForFunction(() => !document.getElementById("mainlist-refresh").disabled, { timeout: 90000 }).catch(() => {});
