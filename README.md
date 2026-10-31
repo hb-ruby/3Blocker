@@ -92,5 +92,5 @@ Source status:
 (`true` = archived, read-only; `resource not found` = the repo was deleted.) The options page shows
 the same status.
 
-3Blocker itself is released under the [MIT License](LICENSE). The bundled blocklist is the Block
-List Project's and falls under their terms, not this license.
+3Blocker itself is released under the [MIT License](LICENSE). The bundled blocklist is from the
+Block List Project and is public domain.

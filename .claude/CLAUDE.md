@@ -17,7 +17,8 @@ Firefox runs the MV3 background as an event page and unloads it after ~30 s idle
 
 ```
 README.md            only file at the top level (plus LICENSE, and package.json / lock, required there by npm)
-LICENSE              MIT, copyright hb-ruby (covers 3Blocker's code, not the bundled blocklist)
+LICENSE              MIT, copyright hb-ruby (covers 3Blocker's code, not the bundled blocklist; the list is public domain under the
+                     Block List Project's Unlicense. Its file header says "MIT", which contradicts the repo's LICENSE and README)
 .claude/CLAUDE.md    these notes
 src/                 the extension itself — the only folder that gets packaged
   manifest.json
