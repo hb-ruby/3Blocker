@@ -92,6 +92,7 @@ npm run sign         # AMO unlisted signing -> signed .xpi in dist/
 ## Changelog
 
 <!-- Newest first. One line per meaningful change. -->
+- 2026-10-31 — README rewritten to the user's outline: intro + install (clone, AMO keys in `.env`, `npm run sign`, install `.xpi`), Usage, How it works (order, rule matching, list refresh, limits), Development and license. Keep it user-facing; technical notes stay here.
 - 2026-10-31 — Main blocklist can no longer be allowlisted: precedence is now main blocklist > allowlist > custom blocks; the allowlist only carves exceptions out of custom blocks. `ADD_ALLOWLIST` refuses main-listed hosts (options page shows the reason); block page shows "Allow this site" for custom blocks only. Existing allowlist rules are kept (inert if main-listed). Fixed a race in the pushState e2e check.
 - 2026-10-31 — Replaced the popup's 3-level block slider (and its unblock toggle) with two buttons: "Block site" (host without `www.`) and "Block page" (exact address incl. query). Rule logic in `BlocklistCore.popupRulesForUrl` (unit-tested); popup reloads the tab onto the block page. E2E drives the popup against real tabs. Removed the root-domain guess (and its `co.uk` problem).
 - 2026-10-31 — Removed `.env.example` (no longer needed); signing credentials live only in the local, gitignored `.env`.
