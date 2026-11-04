@@ -65,10 +65,10 @@ Adds run the rule through `BlocklistCore.normalizeRule` (lowercase, trim, strip 
 
 ## Current state / known gaps
 
-- Version **1.0.2, not signed yet**. The user decides when to bump and sign; keep committing under 1.0.2 until then.
+- Version **1.0.2, signed**. The dev decides when to bump and sign;
 - Scope is deliberately just blocking sites (no time limits or other features); keep it simple.
 - "Block site" from a non-`www` subdomain (e.g. `old.reddit.com`) blocks only that subdomain.
-- No Chrome support yet (would need `service_worker` background and `chrome.*` / polyfill).
+- Chrome support not in feature scope
 
 ## Testing
 
