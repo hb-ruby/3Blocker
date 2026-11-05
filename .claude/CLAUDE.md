@@ -66,8 +66,7 @@ Adds go through `normalizeRule` (lowercase, trim, strip `scheme://` and `#fragme
 
 ## Status and ideas
 
-- Version **1.0.2**, signed. The dev decides when to bump and sign.
-- Loosening challenge (typed paragraph + logged reason) is implemented, unreleased. Time delays were considered and left out.
+- Version **1.0.3** (adds the loosening challenge: typed paragraph + logged reason; time delays were considered and left out). The dev decides when to bump and sign.
 - Idea: accountability partner passcode, only once removal/disable is reported to the partner (otherwise uninstalling is easier than the passcode). Same for a daily cap.
 - Idea: removal page. `runtime.setUninstallURL` (top level, no permission) opens a tab after uninstall; it must be http(s), e.g. a static page on GitHub Pages from a `docs/` folder outside `src/`. Use no query params so nothing about the user is sent. Firefox gives no hook before removal or on disable.
 - Idea: re-enable notice. `storage.session` is cleared on disable, browser restart and install/update; if its flag is missing at startup and neither `onStartup` nor `onInstalled` fires (wait briefly, they can arrive late), it was a re-enable, so open an extension page saying 3Blocker was off (approximate duration from a saved last-active timestamp). Needs testing in Firefox.
