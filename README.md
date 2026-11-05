@@ -19,6 +19,12 @@ On top of that you have two lists of your own:
 
 Both lists can be viewed and edited on the options page (the list button in the popup).
 
+Blocking is instant, but loosening is not: to **allow a site** or **remove a block** you first
+type out a sentence by hand (no pasting), by default `I am willingly disabling <the site>`, then
+give a reason. On the options page you can replace that sentence with a longer paragraph of your
+own (put `[url]` in it to name the site), and see the **unblock log** of everything you've
+unblocked and why.
+
 The block page can also display a custom message, set on the options page.
 
 ### How it works

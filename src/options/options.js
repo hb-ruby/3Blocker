@@ -2,13 +2,17 @@
 document.addEventListener("DOMContentLoaded", () => {
   // One entry per list: the message types it uses and its elements
   const lists = {
+    // Removing a block loosens it, so it goes through the challenge
     customBlocks: {
       add: "ADD_CUSTOM_BLOCK",
       remove: "REMOVE_CUSTOM_BLOCK",
+      removeChallenge: "unblock",
       prefix: "blocklist"
     },
+    // Adding to the allowlist loosens it, so it goes through the challenge
     allowlist: {
       add: "ADD_ALLOWLIST",
+      addChallenge: "allow",
       remove: "REMOVE_ALLOWLIST",
       prefix: "allowlist"
     }
@@ -27,7 +31,10 @@ document.addEventListener("DOMContentLoaded", () => {
     list.form.addEventListener("submit", async (e) => {
       e.preventDefault();
       list.error.textContent = "";
-      const res = await send({ type: list.add, rule: list.input.value });
+      const res = list.addChallenge
+        ? await challenge(list.addChallenge, list.input.value, `Allow ${list.input.value.trim()}`, "Allow")
+        : await send({ type: list.add, rule: list.input.value });
+      if (res && res.cancelled) return;
       if (res && res.success) {
         list.input.value = "";
         await refresh();
@@ -47,6 +54,39 @@ document.addEventListener("DOMContentLoaded", () => {
       console.warn("3Blocker message failed:", err);
       return null;
     }
+  }
+
+  // Loosening goes through the typed paragraph and a reason, in a dialog.
+  // Resolves with the action's answer, { cancelled: true }, or the error that kept it from starting.
+  const dialog = document.getElementById("challenge-dialog");
+  const dialogBox = document.getElementById("challenge-box");
+  let closeDialog = null;
+  dialog.addEventListener("close", () => {
+    dialogBox.replaceChildren();
+    if (closeDialog) closeDialog({ cancelled: true });
+  });
+
+  function challenge(action, rule, title, confirmLabel) {
+    return new Promise((resolve) => {
+      const finish = (res) => {
+        closeDialog = null;
+        if (dialog.open) dialog.close();
+        resolve(res);
+      };
+      LoosenChallenge.start(dialogBox, {
+        action,
+        rule,
+        confirmLabel,
+        onDone: finish,
+        onCancel: () => finish({ cancelled: true })
+      }).then((ch) => {
+        if (!ch || !ch.success) return resolve(ch || { success: false });
+        closeDialog = finish;
+        document.getElementById("challenge-title").textContent = title;
+        dialog.showModal();
+        dialogBox.querySelector(".challenge-input").focus();
+      });
+    });
   }
 
   async function refresh() {
@@ -76,7 +116,13 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.setAttribute("aria-label", `Remove ${rule}`);
       btn.addEventListener("click", async () => {
         btn.disabled = true;
-        await send({ type: list.remove, rule });
+        if (list.removeChallenge) {
+          const res = await challenge(list.removeChallenge, rule, `Remove ${rule}`, "Remove");
+          if (res && !res.success && !res.cancelled) list.error.textContent = res.error || "Could not remove the rule.";
+        } else {
+          await send({ type: list.remove, rule });
+        }
+        btn.disabled = false;
         await refresh();
       });
 
@@ -167,14 +213,97 @@ document.addEventListener("DOMContentLoaded", () => {
     renderPreview();
   }).catch(() => renderPreview());
 
+  // Unblock paragraph: the user's own text to type before loosening (longer than the default)
+  const paragraph = {
+    form: document.getElementById("paragraph-form"),
+    input: document.getElementById("paragraph-input"),
+    reset: document.getElementById("paragraph-reset"),
+    status: document.getElementById("paragraph-status"),
+    count: document.getElementById("paragraph-count")
+  };
+  const PARAGRAPH_KEY = BlocklistCore.CHALLENGE_KEY;
+  const PARAGRAPH_MIN = BlocklistCore.DEFAULT_CHALLENGE.length + 1;
+
+  function renderParagraphCount() {
+    const n = paragraph.input.value.replace(/\s+/g, " ").trim().length;
+    paragraph.count.textContent = n ? `${n} characters (at least ${PARAGRAPH_MIN})` : `Using the default`;
+    paragraph.count.classList.toggle("short", n > 0 && n < PARAGRAPH_MIN);
+  }
+
+  paragraph.input.addEventListener("input", () => {
+    paragraph.status.textContent = "";
+    renderParagraphCount();
+  });
+  paragraph.form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const check = BlocklistCore.validateChallengeParagraph(paragraph.input.value);
+    if (!check.valid) {
+      paragraph.status.textContent = check.error;
+      return;
+    }
+    try {
+      await browser.storage.local.set({ [PARAGRAPH_KEY]: check.text });
+      paragraph.input.value = check.text;
+      paragraph.status.textContent = "Saved.";
+    } catch (err) {
+      paragraph.status.textContent = "Could not save the paragraph.";
+    }
+    renderParagraphCount();
+  });
+  paragraph.reset.addEventListener("click", async () => {
+    try {
+      await browser.storage.local.remove(PARAGRAPH_KEY);
+      paragraph.input.value = "";
+      paragraph.status.textContent = "Back to the default paragraph.";
+    } catch (err) {
+      paragraph.status.textContent = "Could not reset the paragraph.";
+    }
+    renderParagraphCount();
+  });
+  browser.storage.local.get(PARAGRAPH_KEY).then((data) => {
+    paragraph.input.value = data[PARAGRAPH_KEY] || "";
+    renderParagraphCount();
+  }).catch(() => renderParagraphCount());
+
+  // Unblock log: newest first
+  async function refreshLog() {
+    const res = await send({ type: "GET_UNBLOCK_LOG" });
+    if (!res || !res.success) return;
+    document.getElementById("log-count").textContent = String(res.entries.length);
+    document.getElementById("log-empty").hidden = res.entries.length > 0;
+    document.getElementById("log-list").replaceChildren(...res.entries.map((entry) => {
+      const li = document.createElement("li");
+      li.className = "log-item";
+      const head = document.createElement("div");
+      head.className = "log-head";
+      const action = document.createElement("span");
+      action.className = "log-action";
+      action.textContent = entry.action === "allow" ? "Allowed" : "Removed block";
+      const rule = document.createElement("span");
+      rule.className = "log-rule";
+      rule.textContent = entry.url || entry.rule;
+      const when = document.createElement("time");
+      when.dateTime = new Date(entry.at).toISOString();
+      when.textContent = new Date(entry.at).toLocaleString();
+      head.append(action, rule, when);
+      const reason = document.createElement("p");
+      reason.className = "log-reason";
+      reason.textContent = entry.reason;
+      li.append(head, reason);
+      return li;
+    }));
+  }
+
   // Stay in sync when rules change elsewhere (popup buttons, block page "Allow this site")
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && (changes.user_allowlist || changes.user_custom_blocks)) {
       refresh();
     }
+    if (area === "local" && changes[BlocklistCore.UNBLOCK_LOG_KEY]) refreshLog();
   });
 
   refresh();
+  refreshLog();
   refreshStatus();
   refreshSourceState();
 });

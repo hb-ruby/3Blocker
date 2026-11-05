@@ -87,12 +87,22 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    const res = await browser.runtime.sendMessage({ type: "ADD_ALLOWLIST", rule: hostToAllow })
-      .catch((err) => ({ success: false, error: String(err) }));
-    if (res && res.success) {
-      window.location.href = targetUrl;
+    // Allowing takes the typed paragraph and a reason (see challenge/challenge.js)
+    const actions = document.querySelector(".actions-group");
+    const box = document.getElementById("challenge-box");
+    showNote("");
+    const ch = await LoosenChallenge.start(box, {
+      action: "allow",
+      rule: hostToAllow,
+      url: targetUrl,
+      confirmLabel: "Allow this site",
+      onDone: () => { window.location.href = targetUrl; },
+      onCancel: () => { actions.hidden = false; }
+    });
+    if (ch && ch.success) {
+      actions.hidden = true;
     } else {
-      showNote((res && res.error) || "Could not allow this site.");
+      showNote((ch && ch.error) || "Could not allow this site.");
     }
   });
 });

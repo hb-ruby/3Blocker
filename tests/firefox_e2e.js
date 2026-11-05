@@ -117,6 +117,25 @@ async function openExt(file, viewport) {
 
 const send = (page, msg) => page.evaluate((m) => browser.runtime.sendMessage(m), msg);
 
+// Loosening through the message API: get the paragraph, then send it back typed, with a reason
+async function loosen(ext, type, rule, reason = "e2e cleanup") {
+  const action = type === "ADD_ALLOWLIST" ? "allow" : "unblock";
+  const ch = await send(ext, { type: "GET_CHALLENGE", action, rule });
+  if (!ch || !ch.success) return ch;
+  return send(ext, { type, rule, typed: ch.text, reason });
+}
+
+// Fill in an open challenge (block page or options dialog) the way a person would: type, Next, reason, confirm
+async function completeChallenge(page, reason) {
+  await page.waitForSelector(".challenge .challenge-input", { timeout: 5000 });
+  const text = await page.evaluate(() => document.querySelector(".challenge-text").getAttribute("aria-label"));
+  await page.type(".challenge-input:not(.challenge-reason)", text);
+  await page.click(".challenge-next");
+  await page.type(".challenge-reason", reason);
+  await page.click(".challenge-confirm");
+  return text;
+}
+
 async function screenshot(page, name) {
   if (!process.env.SCREENSHOT_DIR) return;
   await page.screenshot({ path: path.join(process.env.SCREENSHOT_DIR, name) })
@@ -193,9 +212,56 @@ async function testBlocking() {
   r = await visit("https://example.com/");
   check(r.url.startsWith(BLOCKED) && r.url.includes("reason=custom_block"), "Custom-blocked site is redirected", r.url.slice(0, 120));
 
+  // Allowing needs the paragraph and a reason, and the message API checks both itself
+  let refusedAllow = await send(ext, { type: "ADD_ALLOWLIST", rule: "example.com", reason: "skip it" });
+  check(!refusedAllow.success && refusedAllow.challenge === "I am willingly disabling example.com",
+    "ADD_ALLOWLIST without the typed paragraph is refused", JSON.stringify(refusedAllow));
+  refusedAllow = await send(ext, { type: "ADD_ALLOWLIST", rule: "example.com", typed: "I am willingly disabling example.com", reason: "  " });
+  check(!refusedAllow.success && refusedAllow.reasonRequired, "ADD_ALLOWLIST without a reason is refused", JSON.stringify(refusedAllow));
+  check((await send(ext, { type: "CHECK_URL", url: "https://example.com/" })).blocked, "Refused allows change nothing");
+
   await r.page.click("#btn-allow-site");
+  await r.page.waitForSelector(".challenge", { timeout: 5000 });
+  const ui = await r.page.evaluate(() => {
+    const input = document.querySelector(".challenge-input");
+    const paste = new ClipboardEvent("paste", { cancelable: true, bubbles: true });
+    input.dispatchEvent(paste);
+    const drop = new DragEvent("drop", { cancelable: true, bubbles: true });
+    input.dispatchEvent(drop);
+    return {
+      text: document.querySelector(".challenge-text").textContent,
+      nextDisabled: document.querySelector(".challenge-next").disabled,
+      actionsHidden: document.querySelector(".actions-group").hidden,
+      pasteBlocked: paste.defaultPrevented,
+      dropBlocked: drop.defaultPrevented,
+      unselectable: getComputedStyle(document.querySelector(".challenge-text")).userSelect
+    };
+  });
+  check(ui.text === "I am willingly disabling https://example.com/" && ui.nextDisabled && ui.actionsHidden,
+    "Allow this site asks to type 'I am willingly disabling <full URL>'", JSON.stringify(ui));
+  check(ui.pasteBlocked && ui.dropBlocked && ui.unselectable === "none", "The paragraph can't be pasted, dropped or selected", JSON.stringify(ui));
+  await r.page.type(".challenge-input", "I am wx");
+  const mistake = await r.page.evaluate(() => ({
+    status: document.querySelector(".challenge-status").textContent,
+    wrong: document.querySelector(".challenge-wrong").textContent,
+    next: document.querySelector(".challenge-next").disabled
+  }));
+  check(/Mistake at character 7/.test(mistake.status) && mistake.wrong === "i" && mistake.next,
+    "A typo is marked and keeps Next disabled", JSON.stringify(mistake));
+  for (let i = 0; i < 2; i++) await r.page.keyboard.press("Backspace");
+  await r.page.type(".challenge-input", "willingly disabling https://example.com/");
+  check(!(await r.page.evaluate(() => document.querySelector(".challenge-next").disabled)), "Fixing the typo and finishing enables Next");
+  await r.page.click(".challenge-next");
+  check(await r.page.evaluate(() => document.querySelector(".challenge-confirm").disabled), "Confirm waits for a reason");
+  await screenshot(r.page, "blocked-challenge.png");
+  await r.page.type(".challenge-reason", "Need it for work");
+  await r.page.click(".challenge-confirm");
   const allowed = await waitForLanding(r.page);
   check(allowed.url.startsWith("https://example.com"), "Allow this site unblocks and continues to the site", allowed.url);
+  const log = await send(ext, { type: "GET_UNBLOCK_LOG" });
+  const last = log.entries[0] || {};
+  check(last.action === "allow" && last.rule === "example.com" && last.url === "https://example.com/" && last.reason === "Need it for work" && last.at > 0,
+    "The allow and its reason are in the unblock log", JSON.stringify(last));
   const afterAllow = await send(ext, { type: "CHECK_URL", url: "https://example.com/" });
   check(afterAllow.blocked === false && afterAllow.reason === "allowlisted", "Allowlist overrides the custom block", JSON.stringify(afterAllow));
 
@@ -306,8 +372,8 @@ async function testPopupBlocking(ext) {
 
   const rules = await send(ext, { type: "GET_USER_RULES" });
   check(!rules.allowlist.includes("example.net") && rules.customBlocks.includes("example.net"), "Popup only adds block rules");
-  await send(ext, { type: "REMOVE_CUSTOM_BLOCK", rule: "example.net" });
-  await send(ext, { type: "REMOVE_CUSTOM_BLOCK", rule: "www.example.net/?from=popup" });
+  await loosen(ext, "REMOVE_CUSTOM_BLOCK", "example.net");
+  await loosen(ext, "REMOVE_CUSTOM_BLOCK", "www.example.net/?from=popup");
 }
 
 // Options page: shows the user's lists and edits them through the same message API
@@ -340,26 +406,61 @@ async function testOptionsPage(ext) {
     "Options page explains that main-listed sites can't be allowed", mainErr);
   await opts.evaluate(() => { document.getElementById("allowlist-input").value = ""; });
 
+  // Allowing opens the challenge dialog; cancelling it saves nothing
   await opts.type("#allowlist-input", "allowed.example.org");
   await opts.click("#allowlist-form button");
+  await opts.waitForSelector("#challenge-dialog[open] .challenge", { timeout: 5000 }).catch(() => {});
+  const dlg = await opts.evaluate(() => ({
+    open: document.getElementById("challenge-dialog").open,
+    title: document.getElementById("challenge-title").textContent,
+    text: document.querySelector("#challenge-dialog .challenge-text").textContent
+  }));
+  check(dlg.open && dlg.title === "Allow allowed.example.org" && dlg.text === "I am willingly disabling allowed.example.org",
+    "Options page asks for the paragraph before allowing", JSON.stringify(dlg));
+  await screenshot(opts, "options-challenge.png");
+  await opts.click("#challenge-dialog .challenge-cancel");
   await sleep(300);
-  check((await listed("allowlist-list")).includes("allowed.example.org"), "Options page adds an allowlist rule");
+  check(!(await opts.evaluate(() => document.getElementById("challenge-dialog").open)) && !(await listed("allowlist-list")).includes("allowed.example.org"),
+    "Cancelling the challenge closes it and allows nothing");
 
-  // A rule added elsewhere (e.g. from the popup) shows up without reloading
-  await send(ext, { type: "ADD_ALLOWLIST", rule: "from-popup.example.org" });
+  await opts.click("#allowlist-form button");
+  await completeChallenge(opts, "testing the allowlist");
+  await sleep(300);
+  check((await listed("allowlist-list")).includes("allowed.example.org"), "Options page adds an allowlist rule after the challenge");
+
+  // A rule added elsewhere (e.g. from the block page) shows up without reloading
+  await loosen(ext, "ADD_ALLOWLIST", "from-popup.example.org");
   await sleep(300);
   check((await listed("allowlist-list")).includes("from-popup.example.org"), "Options page updates when rules change elsewhere");
   await screenshot(opts, "options.png");
 
+  const noChallenge = await send(ext, { type: "REMOVE_CUSTOM_BLOCK", rule: "options-test.example.org/" });
+  check(!noChallenge.success && (await listed("blocklist-list")).includes("options-test.example.org/"),
+    "REMOVE_CUSTOM_BLOCK without the typed paragraph is refused", JSON.stringify(noChallenge));
   await opts.click('#blocklist-list button[aria-label="Remove options-test.example.org/"]');
+  const removeText = await completeChallenge(opts, "done testing");
   await sleep(300);
-  check(!(await listed("blocklist-list")).includes("options-test.example.org/"), "Options page removes a block rule");
+  check(removeText === "I am willingly disabling options-test.example.org/" && !(await listed("blocklist-list")).includes("options-test.example.org/"),
+    "Options page removes a block rule after the challenge", removeText);
   res = await send(ext, { type: "CHECK_URL", url: "https://options-test.example.org/" });
   check(!res.blocked, "Removed rule no longer blocks", JSON.stringify(res));
 
   await opts.click('#allowlist-list button[aria-label="Remove allowed.example.org"]');
   await sleep(300);
-  check(!(await listed("allowlist-list")).includes("allowed.example.org"), "Options page removes an allowlist rule");
+  check(!(await listed("allowlist-list")).includes("allowed.example.org") && !(await opts.evaluate(() => document.getElementById("challenge-dialog").open)),
+    "Options page removes an allowlist rule right away (tightening needs no challenge)");
+
+  // Unblock log card lists every loosening, newest first, with its reason
+  await opts.click("#log-card summary");
+  const logView = await opts.evaluate(() => ({
+    count: document.getElementById("log-count").textContent,
+    rules: [...document.querySelectorAll("#log-list .log-rule")].map((e) => e.textContent),
+    reasons: [...document.querySelectorAll("#log-list .log-reason")].map((e) => e.textContent)
+  }));
+  check(logView.rules[0] === "options-test.example.org/" && logView.reasons[0] === "done testing" &&
+    logView.rules.includes("https://example.com/") && logView.reasons.includes("Need it for work") && Number(logView.count) === logView.rules.length,
+    "Options page shows the unblock log, newest first", JSON.stringify(logView));
+  await screenshot(opts, "options-log.png");
   await send(ext, { type: "REMOVE_ALLOWLIST", rule: "from-popup.example.org" });
 
   // Main blocklist card: size and source repo status (the bundled list is never refreshed)
@@ -380,6 +481,7 @@ async function testOptionsPage(ext) {
   check(!card.refreshButton && /bundled/.test(card.note) && /isn't downloaded/.test(card.note),
     "Options page has no 'Refresh now' and says the list is bundled", JSON.stringify(card));
   await testBlockMessage(opts);
+  await testChallengeParagraph(ext, opts);
   await opts.close();
 }
 
@@ -435,6 +537,43 @@ async function testBlockMessage(opts) {
   const reset = await titleOf();
   check(reset.t.text === "Not here." && reset.t.accent.join() === "here.", "Reset brings back the default headline", JSON.stringify(reset.t));
   await reset.r.page.close().catch(() => {});
+}
+
+// Options page "Unblock paragraph": a custom paragraph (longer than the default) replaces it
+async function testChallengeParagraph(ext, opts) {
+  const closed = await opts.evaluate(() => !document.getElementById("paragraph-card").open);
+  check(closed, "Unblock paragraph section is collapsed by default");
+  await opts.click("#paragraph-card summary");
+
+  await opts.type("#paragraph-input", "Too short to count");
+  await opts.click("#paragraph-form button[type=submit]");
+  await sleep(300);
+  let state = await opts.evaluate(async () => ({
+    status: document.getElementById("paragraph-status").textContent,
+    stored: (await browser.storage.local.get("challenge_paragraph")).challenge_paragraph || ""
+  }));
+  check(/longer than the default/.test(state.status) && !state.stored, "A paragraph not longer than the default is refused", JSON.stringify(state));
+
+  const custom = "I set this block up for a reason, and I am still choosing to open [url] right now.";
+  await opts.evaluate(() => { document.getElementById("paragraph-input").value = ""; });
+  await opts.type("#paragraph-input", custom);
+  await opts.click("#paragraph-form button[type=submit]");
+  await opts.waitForFunction(() => document.getElementById("paragraph-status").textContent === "Saved.", { timeout: 5000 }).catch(() => {});
+  state = await opts.evaluate(async () => (await browser.storage.local.get("challenge_paragraph")).challenge_paragraph);
+  check(state === custom, "Options page saves a custom paragraph", state);
+  await screenshot(opts, "options-paragraph.png");
+
+  await send(ext, { type: "ADD_CUSTOM_BLOCK", rule: "paragraph.example.org" });
+  const ch = await send(ext, { type: "GET_CHALLENGE", action: "unblock", rule: "paragraph.example.org" });
+  check(ch.text === custom.replace("[url]", "paragraph.example.org"), "The custom paragraph is asked for, with [url] filled in", ch.text);
+  const old = await send(ext, { type: "REMOVE_CUSTOM_BLOCK", rule: "paragraph.example.org", typed: "I am willingly disabling paragraph.example.org", reason: "x" });
+  check(!old.success, "The default paragraph no longer works once a custom one is set", JSON.stringify(old));
+  check((await loosen(ext, "REMOVE_CUSTOM_BLOCK", "paragraph.example.org")).success, "The custom paragraph unblocks");
+
+  await opts.click("#paragraph-reset");
+  await opts.waitForFunction(() => document.getElementById("paragraph-input").value === "", { timeout: 5000 }).catch(() => {});
+  const reset = await opts.evaluate(async () => (await browser.storage.local.get("challenge_paragraph")).challenge_paragraph);
+  check(reset === undefined, "Reset goes back to the default paragraph", String(reset));
 }
 
 // Firefox unloads idle MV3 event pages (normally after 30 s). Blocking must still work when a

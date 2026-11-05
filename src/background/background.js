@@ -222,26 +222,39 @@ async function handleMessage(message) {
       return { success: true, rule, count: userCustomBlocks.size };
     }
 
-    case "REMOVE_CUSTOM_BLOCK": {
-      if (!message.rule) return { success: false, error: "Rule is required" };
-      userCustomBlocks.delete(message.rule.toLowerCase().trim());
-      await BlocklistDB.setUserRules(userAllowlist, userCustomBlocks);
-      return { success: true, count: userCustomBlocks.size };
+    case "GET_CHALLENGE": {
+      const prep = await prepareLoosening(message);
+      if (prep.error) return { success: false, ...prep };
+      return { success: true, action: prep.action, rule: prep.rule, target: prep.target, text: prep.text };
     }
 
+    case "GET_UNBLOCK_LOG": {
+      return { success: true, entries: (await BlocklistDB.getUnblockLog()).slice().reverse() };
+    }
+
+    // Loosening actions: need the challenge paragraph typed exactly, and a reason for the log
+    case "REMOVE_CUSTOM_BLOCK":
     case "ADD_ALLOWLIST": {
-      const rule = BlocklistCore.normalizeRule(message.rule);
-      if (!rule) return { success: false, error: "Not a valid rule" };
-      // The main blocklist beats the allowlist, so such a rule would never do anything
-      const listed = BlocklistCore.mainBlocklistMatchForRule(rule, activeBlocklistSet);
-      if (listed) {
-        return { success: false, error: `${listed} is on the main blocklist and can't be allowed.`, mainBlocklist: listed };
+      const prep = await prepareLoosening({ ...message, action: message.type === "ADD_ALLOWLIST" ? "allow" : "unblock" });
+      if (prep.error) return { success: false, ...prep };
+      if (!BlocklistCore.challengeMatches(message.typed, prep.text)) {
+        return { success: false, error: "The paragraph doesn't match. Type it out exactly.", challenge: prep.text };
       }
-      userAllowlist.add(rule);
-      // If rule was also in custom blocks, remove it to resolve conflict
-      userCustomBlocks.delete(rule);
+      const reason = BlocklistCore.cleanReason(message.reason);
+      if (!reason) return { success: false, error: "Give a reason for the log.", reasonRequired: true };
+
+      if (prep.action === "allow") {
+        userAllowlist.add(prep.rule);
+        // If rule was also in custom blocks, remove it to resolve conflict
+        userCustomBlocks.delete(prep.rule);
+      } else {
+        userCustomBlocks.delete(prep.rule);
+      }
       await BlocklistDB.setUserRules(userAllowlist, userCustomBlocks);
-      return { success: true, rule, count: userAllowlist.size };
+      const entry = { at: Date.now(), action: prep.action, rule: prep.rule, reason };
+      if (prep.url) entry.url = prep.url;
+      await BlocklistDB.appendUnblockLog(entry);
+      return { success: true, rule: prep.rule, count: prep.action === "allow" ? userAllowlist.size : userCustomBlocks.size };
     }
 
     case "REMOVE_ALLOWLIST": {
@@ -254,4 +267,40 @@ async function handleMessage(message) {
     default:
       return { success: false, error: `Unknown message type: ${message.type}` };
   }
+}
+
+/**
+ * Work out what a loosening action would do and the paragraph it needs.
+ * message: { action: "allow" | "unblock", rule, url? }. For "allow" from the block page, `url` is
+ * the blocked page: the paragraph then names that full URL, if the rule really is what blocks it.
+ * @returns {{ action, rule, target, text, url? } | { error, mainBlocklist? }}
+ */
+async function prepareLoosening(message) {
+  const action = message.action;
+  let rule;
+  let url = "";
+  if (action === "allow") {
+    rule = BlocklistCore.normalizeRule(message.rule);
+    if (!rule) return { error: "Not a valid rule" };
+    // The main blocklist beats the allowlist, so such a rule would never do anything
+    const listed = BlocklistCore.mainBlocklistMatchForRule(rule, activeBlocklistSet);
+    if (listed) {
+      return { error: `${listed} is on the main blocklist and can't be allowed.`, mainBlocklist: listed };
+    }
+    if (message.url) {
+      const check = checkUrl(message.url);
+      if (check.blocked && check.reason === "custom_block" && check.matchedRule === rule) {
+        url = BlocklistCore.challengeTargetFromUrl(message.url);
+      }
+    }
+  } else if (action === "unblock") {
+    if (!message.rule) return { error: "Rule is required" };
+    rule = message.rule.toLowerCase().trim();
+    if (!userCustomBlocks.has(rule)) return { error: "That rule isn't on your blocklist." };
+  } else {
+    return { error: "Unknown action" };
+  }
+  const target = url || rule;
+  const text = BlocklistCore.challengeText(target, await BlocklistDB.getChallengeParagraph());
+  return url ? { action, rule, target, text, url } : { action, rule, target, text };
 }

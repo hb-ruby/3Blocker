@@ -406,6 +406,81 @@
     return parts;
   }
 
+  // Loosening challenge: allowing a site or removing a custom block first needs a paragraph typed
+  // out exactly, then a reason that goes into the unblock log. The default paragraph names the
+  // site; the user can set a longer one of their own (storage.local CHALLENGE_KEY).
+  const CHALLENGE_KEY = "challenge_paragraph";
+  const CHALLENGE_URL_TOKEN = "[url]";
+  const DEFAULT_CHALLENGE = "I am willingly disabling [full website url]";
+  const CHALLENGE_MAX = 2000;
+  const REASON_MAX = 500;
+  const UNBLOCK_LOG_KEY = "unblock_log";
+  const UNBLOCK_LOG_MAX = 1000;
+
+  // Whitespace runs collapse to one space, so line breaks and double spaces never count as mistakes
+  function cleanText(text) {
+    return typeof text === "string" ? text.replace(/\s+/g, " ").trim() : "";
+  }
+
+  /**
+   * Check a custom paragraph from the options page: it must be longer than the default one.
+   * @returns {{ valid: boolean, text: string, error?: string }}
+   */
+  function validateChallengeParagraph(input) {
+    const text = cleanText(input);
+    if (text.length <= DEFAULT_CHALLENGE.length) {
+      return { valid: false, text, error: `Make it longer than the default (more than ${DEFAULT_CHALLENGE.length} characters).` };
+    }
+    if (text.length > CHALLENGE_MAX) {
+      return { valid: false, text, error: `Keep it under ${CHALLENGE_MAX} characters.` };
+    }
+    return { valid: true, text };
+  }
+
+  /**
+   * The paragraph to type before loosening `target` (the full URL on the block page, else the rule).
+   * A valid custom paragraph replaces the default; "[url]" in it is replaced with the target.
+   */
+  function challengeText(target, customParagraph) {
+    const site = cleanText(target);
+    const custom = validateChallengeParagraph(customParagraph);
+    if (custom.valid) return custom.text.split(CHALLENGE_URL_TOKEN).join(site);
+    return `I am willingly disabling ${site}`;
+  }
+
+  // Exact match, case-sensitive; only whitespace is forgiven
+  function challengeMatches(typed, expected) {
+    return cleanText(typed) === expected;
+  }
+
+  /**
+   * How far the typing is correct, for live feedback while typing.
+   * @returns {{ correct: number, mistake: boolean, done: boolean }}
+   *   correct = length of the matching start of `expected`; mistake = a wrong character follows it
+   */
+  function challengeProgress(typed, expected) {
+    const t = (typeof typed === "string" ? typed : "").replace(/\s+/g, " ").replace(/^ /, "");
+    let i = 0;
+    while (i < t.length && i < expected.length && t[i] === expected[i]) i++;
+    const done = challengeMatches(t, expected);
+    return { correct: i, mistake: i < t.length && !done, done };
+  }
+
+  function cleanReason(reason) {
+    return cleanText(reason).slice(0, REASON_MAX);
+  }
+
+  // The site the paragraph names: the page URL without its #fragment
+  function challengeTargetFromUrl(urlString) {
+    try {
+      const url = new URL(urlString);
+      url.hash = "";
+      return url.href;
+    } catch (e) {
+      return "";
+    }
+  }
+
   // Export module for both browser and Node/CJS environments
   const CoreModule = {
     SOURCE_REPO,
@@ -422,7 +497,20 @@
     BLOCK_MESSAGE_KEY,
     BLOCK_MESSAGE_MAX,
     DEFAULT_BLOCK_MESSAGE,
-    parseBlockMessage
+    parseBlockMessage,
+    CHALLENGE_KEY,
+    CHALLENGE_URL_TOKEN,
+    DEFAULT_CHALLENGE,
+    CHALLENGE_MAX,
+    REASON_MAX,
+    UNBLOCK_LOG_KEY,
+    UNBLOCK_LOG_MAX,
+    validateChallengeParagraph,
+    challengeText,
+    challengeMatches,
+    challengeProgress,
+    cleanReason,
+    challengeTargetFromUrl
   };
 
   if (typeof module !== "undefined" && module.exports) {

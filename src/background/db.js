@@ -309,6 +309,49 @@
     return payload;
   }
 
+  /**
+   * Unblock log: one entry per loosening action, oldest first, capped at UNBLOCK_LOG_MAX.
+   * Entries: { at (ms), action: "allow" | "unblock", rule, url?, reason }
+   */
+  const LOG_KEY = "unblock_log";
+  const LOG_MAX = 1000;
+  let memoryLog = [];
+
+  async function getUnblockLog() {
+    try {
+      if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+        const data = await browser.storage.local.get(LOG_KEY);
+        return Array.isArray(data[LOG_KEY]) ? data[LOG_KEY] : [];
+      }
+    } catch (e) {
+      console.warn("Storage access failed:", e);
+    }
+    return memoryLog.slice();
+  }
+
+  async function appendUnblockLog(entry) {
+    const log = (await getUnblockLog()).concat([entry]).slice(-LOG_MAX);
+    if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+      await browser.storage.local.set({ [LOG_KEY]: log });
+    } else {
+      memoryLog = log;
+    }
+    return log;
+  }
+
+  // The user's own challenge paragraph ("" if none)
+  async function getChallengeParagraph() {
+    try {
+      if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+        const data = await browser.storage.local.get("challenge_paragraph");
+        return typeof data.challenge_paragraph === "string" ? data.challenge_paragraph : "";
+      }
+    } catch (e) {
+      console.warn("Storage access failed:", e);
+    }
+    return "";
+  }
+
   const StorageModule = {
     openDatabase,
     getMetadata,
@@ -317,6 +360,9 @@
     loadActiveBlocklist,
     getUserRules,
     setUserRules,
+    getUnblockLog,
+    appendUnblockLog,
+    getChallengeParagraph,
     CHUNK_SIZE
   };
 

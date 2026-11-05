@@ -36,7 +36,7 @@ function assertEqual(actual, expected, message) {
   assert(actual === expected, `${message} (expected: ${expected}, got: ${actual})`);
 }
 
-function runTests() {
+async function runTests() {
   print("\n==========================================");
   print("   3Blocker Unit & Integration Tests      ");
   print("==========================================\n");
@@ -54,6 +54,8 @@ function runTests() {
   testPopupRules();
   testMainBlocklistMatchForRule();
   testSourceRepoState();
+  testChallenge();
+  await testUnblockLog();
 
   print("\n==========================================");
   print(`Results: ${passedTests}/${totalTests} tests passed.`);
@@ -370,6 +372,57 @@ function testBlockMessage() {
   assertEqual(show("Take\n  a   *break*"), "Take a [break]", "Whitespace and line breaks collapse");
   assertEqual(show("x".repeat(200)).length, Core.BLOCK_MESSAGE_MAX, "Message is capped at BLOCK_MESSAGE_MAX");
   assertEqual(Core.BLOCK_MESSAGE_KEY, "block_message", "Stored under storage.local block_message");
+}
+
+function testChallenge() {
+  print("\n--- Loosening challenge paragraph ---");
+  const url = "https://www.example.com/some/page?x=1";
+  assertEqual(Core.challengeText(url, ""), "I am willingly disabling https://www.example.com/some/page?x=1", "Default paragraph names the full URL");
+  assertEqual(Core.challengeText("example.com", undefined), "I am willingly disabling example.com", "Default paragraph can name a rule");
+  assertEqual(Core.DEFAULT_CHALLENGE, "I am willingly disabling [full website url]", "Default as shown on the options page");
+  assertEqual(Core.CHALLENGE_KEY, "challenge_paragraph", "Stored under storage.local challenge_paragraph");
+
+  const short = Core.validateChallengeParagraph("x".repeat(Core.DEFAULT_CHALLENGE.length));
+  assert(!short.valid && /longer/.test(short.error), "A custom paragraph as long as the default is refused");
+  assert(Core.validateChallengeParagraph("x".repeat(Core.DEFAULT_CHALLENGE.length + 1)).valid, "One character longer than the default is accepted");
+  assert(!Core.validateChallengeParagraph("   " + "a ".repeat(21) + "   ").valid, "Length is counted after collapsing whitespace");
+  assert(!Core.validateChallengeParagraph("x".repeat(Core.CHALLENGE_MAX + 1)).valid, "Over CHALLENGE_MAX is refused");
+
+  const custom = "I promised myself I would stay away from this. Opening [url] anyway, on purpose.";
+  assertEqual(Core.challengeText("x.com", custom), "I promised myself I would stay away from this. Opening x.com anyway, on purpose.",
+    "A valid custom paragraph replaces the default; [url] names the site");
+  const noToken = "I am choosing this, knowing exactly why I set up the block in the first place.";
+  assertEqual(Core.challengeText("x.com", noToken), noToken, "A custom paragraph without [url] is used as is");
+  assertEqual(Core.challengeText("x.com", "too short"), "I am willingly disabling x.com", "A too-short stored paragraph falls back to the default");
+
+  const expected = "I am willingly disabling x.com";
+  assert(Core.challengeMatches("I am willingly disabling x.com", expected), "Exact text matches");
+  assert(Core.challengeMatches("  I am   willingly\ndisabling x.com ", expected), "Extra whitespace is forgiven");
+  assert(!Core.challengeMatches("i am willingly disabling x.com", expected), "Case matters");
+  assert(!Core.challengeMatches("I am willingly disabling x.co", expected), "A missing character fails");
+  assert(!Core.challengeMatches(undefined, expected), "Nothing typed fails");
+
+  const p = (t) => JSON.stringify(Core.challengeProgress(t, expected));
+  assertEqual(p(""), JSON.stringify({ correct: 0, mistake: false, done: false }), "Progress starts at zero");
+  assertEqual(p("I am will"), JSON.stringify({ correct: 9, mistake: false, done: false }), "Correct start counts as progress");
+  assertEqual(p("I am wul"), JSON.stringify({ correct: 6, mistake: true, done: false }), "A wrong character is a mistake at its position");
+  assertEqual(p("I am  will"), JSON.stringify({ correct: 9, mistake: false, done: false }), "A double space is not a mistake");
+  assertEqual(p(expected + " "), JSON.stringify({ correct: expected.length, mistake: false, done: true }), "A trailing space still counts as done");
+  assertEqual(p(expected + "x"), JSON.stringify({ correct: expected.length, mistake: true, done: false }), "Extra characters are a mistake");
+
+  assertEqual(Core.cleanReason("  bored \n again "), "bored again", "Reason whitespace collapses");
+  assertEqual(Core.cleanReason("   "), "", "A blank reason is empty");
+  assertEqual(Core.cleanReason("r".repeat(900)).length, Core.REASON_MAX, "Reason is capped at REASON_MAX");
+  assertEqual(Core.challengeTargetFromUrl("https://example.com/a?b=1#frag"), "https://example.com/a?b=1", "Target URL drops the fragment");
+  assertEqual(Core.challengeTargetFromUrl("not a url"), "", "A bad URL gives no target");
+}
+
+async function testUnblockLog() {
+  print("\n--- Unblock log (memory fallback) ---");
+  await DB.appendUnblockLog({ at: 1, action: "allow", rule: "a.com", reason: "one" });
+  const log = await DB.appendUnblockLog({ at: 2, action: "unblock", rule: "b.com", reason: "two" });
+  assertEqual(log.map((e) => e.rule).join(), "a.com,b.com", "Entries are kept oldest first");
+  assertEqual(Core.UNBLOCK_LOG_KEY, "unblock_log", "Stored under storage.local unblock_log");
 }
 
 // Execute tests

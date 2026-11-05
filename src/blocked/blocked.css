@@ -270,3 +270,22 @@ body {
     stroke-dashoffset: 0;
   }
 }
+
+.actions-group[hidden],
+.challenge-box:empty {
+  display: none;
+}
+
+.challenge-box {
+  width: 100%;
+  --red: #ff6b5a;
+  --slab-raised: #232323;
+  --track: #3a3a3a;
+}
+
+/* Challenge buttons stack full width, like the actions above */
+.challenge-box .challenge-actions {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
