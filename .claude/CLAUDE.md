@@ -71,6 +71,8 @@ Adds go through `normalizeRule` (lowercase, trim, strip `scheme://` and `#fragme
 - Idea: removal page. `runtime.setUninstallURL` (top level, no permission) opens a tab after uninstall; it must be http(s), e.g. a static page on GitHub Pages from a `docs/` folder outside `src/`. Use no query params so nothing about the user is sent. Firefox gives no hook before removal or on disable.
 - Idea: re-enable notice. `storage.session` is cleared on disable, browser restart and install/update; if its flag is missing at startup and neither `onStartup` nor `onInstalled` fires (wait briefly, they can arrive late), it was a re-enable, so open an extension page saying 3Blocker was off (approximate duration from a saved last-active timestamp). Needs testing in Firefox.
 - Idea: notify an accountability partner of removal / re-enable. Needs a sending service (removal can only report via the hosted page) and changes `data_collection_permissions: none`, so it should be opt-in.
+- Idea: add confirm button when blocking a site as well as a 5 minute grace period to remove rule if mistake
+- Idea: accountability partner and removal friction dependent on whether another personal app gets implemented
 
 ## Testing
 
