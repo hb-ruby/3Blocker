@@ -73,6 +73,7 @@ Adds go through `normalizeRule` (lowercase, trim, strip `scheme://` and `#fragme
 - Idea: notify an accountability partner of removal / re-enable. Needs a sending service (removal can only report via the hosted page) and changes `data_collection_permissions: none`, so it should be opt-in.
 - Idea: add confirm button when blocking a site as well as a 5 minute grace period to remove rule if mistake
 - Idea: accountability partner and removal friction dependent on whether another personal app gets implemented
+- Note: edge case detected with youtube and wildcard rule use
 
 ## Testing
 
